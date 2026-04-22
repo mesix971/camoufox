@@ -1,0 +1,51 @@
+{
+  "_comment": "WebGL vendor+renderer pairs. Real strings reported by Firefox UNMASKED_* extension. Grouped by plausibility with archetype gpu_tier.",
+  "tiers": {
+    "low": [
+      {"vendor": "Google Inc. (Intel)", "renderer": "ANGLE (Intel, Intel(R) HD Graphics 620 Direct3D11 vs_5_0 ps_5_0, D3D11)"},
+      {"vendor": "Google Inc. (Intel)", "renderer": "ANGLE (Intel, Intel(R) UHD Graphics Direct3D11 vs_5_0 ps_5_0, D3D11)"},
+      {"vendor": "Google Inc. (Intel)", "renderer": "ANGLE (Intel, Intel(R) HD Graphics 4600 Direct3D11 vs_5_0 ps_5_0, D3D11)"},
+      {"vendor": "Mozilla", "renderer": "Mozilla"}
+    ],
+    "mainstream": [
+      {"vendor": "Google Inc. (NVIDIA)", "renderer": "ANGLE (NVIDIA, NVIDIA GeForce GTX 1060 Direct3D11 vs_5_0 ps_5_0, D3D11)"},
+      {"vendor": "Google Inc. (NVIDIA)", "renderer": "ANGLE (NVIDIA, NVIDIA GeForce GTX 1650 Direct3D11 vs_5_0 ps_5_0, D3D11)"},
+      {"vendor": "Google Inc. (NVIDIA)", "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 3060 Direct3D11 vs_5_0 ps_5_0, D3D11)"},
+      {"vendor": "Google Inc. (NVIDIA)", "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 2060 Direct3D11 vs_5_0 ps_5_0, D3D11)"},
+      {"vendor": "Google Inc. (AMD)", "renderer": "ANGLE (AMD, AMD Radeon RX 580 Direct3D11 vs_5_0 ps_5_0, D3D11)"},
+      {"vendor": "Google Inc. (Intel)", "renderer": "ANGLE (Intel, Intel(R) Iris(R) Xe Graphics Direct3D11 vs_5_0 ps_5_0, D3D11)"},
+      {"vendor": "Google Inc. (Intel)", "renderer": "ANGLE (Intel, Intel(R) UHD Graphics 630 Direct3D11 vs_5_0 ps_5_0, D3D11)"}
+    ],
+    "high": [
+      {"vendor": "Google Inc. (NVIDIA)", "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 4070 Direct3D11 vs_5_0 ps_5_0, D3D11)"},
+      {"vendor": "Google Inc. (NVIDIA)", "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 4080 Direct3D11 vs_5_0 ps_5_0, D3D11)"},
+      {"vendor": "Google Inc. (NVIDIA)", "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 4090 Direct3D11 vs_5_0 ps_5_0, D3D11)"},
+      {"vendor": "Google Inc. (NVIDIA)", "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 3080 Direct3D11 vs_5_0 ps_5_0, D3D11)"},
+      {"vendor": "Google Inc. (AMD)", "renderer": "ANGLE (AMD, AMD Radeon RX 7800 XT Direct3D11 vs_5_0 ps_5_0, D3D11)"},
+      {"vendor": "Google Inc. (AMD)", "renderer": "ANGLE (AMD, AMD Radeon RX 6800 XT Direct3D11 vs_5_0 ps_5_0, D3D11)"}
+    ],
+    "apple": [
+      {"vendor": "Apple", "renderer": "Apple M1"},
+      {"vendor": "Apple", "renderer": "Apple M1 Pro"},
+      {"vendor": "Apple", "renderer": "Apple M1 Max"},
+      {"vendor": "Apple", "renderer": "Apple M2"},
+      {"vendor": "Apple", "renderer": "Apple M2 Pro"},
+      {"vendor": "Apple", "renderer": "Apple M3"},
+      {"vendor": "Apple", "renderer": "Apple M3 Pro"}
+    ],
+    "intel_mac": [
+      {"vendor": "Intel Inc.", "renderer": "Intel(R) Iris(TM) Plus Graphics 655"},
+      {"vendor": "Intel Inc.", "renderer": "Intel(R) UHD Graphics 630"},
+      {"vendor": "ATI Technologies Inc.", "renderer": "AMD Radeon Pro 5500M OpenGL Engine"},
+      {"vendor": "ATI Technologies Inc.", "renderer": "AMD Radeon Pro 560X OpenGL Engine"}
+    ],
+    "mixed": [
+      {"vendor": "Mesa", "renderer": "Mesa Intel(R) UHD Graphics (CML GT2)"},
+      {"vendor": "Mesa", "renderer": "Mesa Intel(R) Iris(R) Xe Graphics (TGL GT2)"},
+      {"vendor": "Mesa/X.org", "renderer": "llvmpipe (LLVM 15.0.7, 256 bits)"},
+      {"vendor": "NVIDIA Corporation", "renderer": "NVIDIA GeForce GTX 1660/PCIe/SSE2"},
+      {"vendor": "NVIDIA Corporation", "renderer": "NVIDIA GeForce RTX 3060/PCIe/SSE2"},
+      {"vendor": "AMD", "renderer": "AMD Radeon RX 6600 (radeonsi, navi23, LLVM 15.0.7, DRM 3.54, 6.5.0-26-generic)"}
+    ]
+  }
+}

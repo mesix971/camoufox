@@ -1,0 +1,153 @@
+{
+  "_comment": "Realistic OS × hardware × GPU archetypes. Each archetype constrains the choices a Profile can pick. Weights reflect approximate share of desktop web traffic (2024-2025).",
+  "archetypes": [
+    {
+      "id": "windows-11-mainstream",
+      "weight": 28,
+      "os": "windows",
+      "os_version": "11",
+      "platform": "Win32",
+      "oscpu": "Windows NT 10.0; Win64; x64",
+      "ua_template": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:{ffver}) Gecko/20100101 Firefox/{ffver}",
+      "cpu_cores_choices": [4, 6, 8, 8, 8, 12, 16],
+      "screen_presets": [
+        [1920, 1080], [1920, 1080], [1920, 1080],
+        [2560, 1440], [2560, 1440],
+        [1366, 768],
+        [1680, 1050],
+        [3840, 2160]
+      ],
+      "dpr_choices": [1.0, 1.0, 1.0, 1.25, 1.5],
+      "color_depth_choices": [24, 24, 24, 30],
+      "audio_sample_rate_choices": [48000, 48000, 44100],
+      "audio_max_channel_count_choices": [2, 2, 6, 8],
+      "font_set_id": "windows",
+      "gpu_tier": "mainstream",
+      "taskbar_height": 48,
+      "max_touch_points_choices": [0, 0, 0, 10]
+    },
+    {
+      "id": "windows-11-gamer",
+      "weight": 8,
+      "os": "windows",
+      "os_version": "11",
+      "platform": "Win32",
+      "oscpu": "Windows NT 10.0; Win64; x64",
+      "ua_template": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:{ffver}) Gecko/20100101 Firefox/{ffver}",
+      "cpu_cores_choices": [8, 12, 16, 16, 24, 32],
+      "screen_presets": [
+        [2560, 1440], [2560, 1440],
+        [3440, 1440],
+        [3840, 2160], [3840, 2160],
+        [1920, 1080]
+      ],
+      "dpr_choices": [1.0, 1.0, 1.25, 1.5],
+      "color_depth_choices": [24, 30, 30],
+      "audio_sample_rate_choices": [48000, 48000, 96000],
+      "audio_max_channel_count_choices": [2, 6, 8],
+      "font_set_id": "windows",
+      "gpu_tier": "high",
+      "taskbar_height": 48,
+      "max_touch_points_choices": [0]
+    },
+    {
+      "id": "windows-10-legacy",
+      "weight": 12,
+      "os": "windows",
+      "os_version": "10",
+      "platform": "Win32",
+      "oscpu": "Windows NT 10.0; Win64; x64",
+      "ua_template": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:{ffver}) Gecko/20100101 Firefox/{ffver}",
+      "cpu_cores_choices": [2, 4, 4, 6, 8],
+      "screen_presets": [
+        [1920, 1080], [1920, 1080],
+        [1366, 768], [1366, 768],
+        [1600, 900],
+        [1440, 900]
+      ],
+      "dpr_choices": [1.0],
+      "color_depth_choices": [24],
+      "audio_sample_rate_choices": [44100, 48000],
+      "audio_max_channel_count_choices": [2, 2, 6],
+      "font_set_id": "windows",
+      "gpu_tier": "low",
+      "taskbar_height": 40,
+      "max_touch_points_choices": [0]
+    },
+    {
+      "id": "macos-14-retina",
+      "weight": 14,
+      "os": "macos",
+      "os_version": "14.4",
+      "platform": "MacIntel",
+      "oscpu": "Intel Mac OS X 10.15",
+      "ua_template": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:{ffver}) Gecko/20100101 Firefox/{ffver}",
+      "cpu_cores_choices": [8, 8, 10, 12, 12, 16],
+      "screen_presets": [
+        [1440, 900],
+        [1680, 1050],
+        [1920, 1200],
+        [2560, 1600], [2560, 1600],
+        [3024, 1964],
+        [3456, 2234]
+      ],
+      "dpr_choices": [2.0, 2.0, 2.0],
+      "color_depth_choices": [30, 30, 24],
+      "audio_sample_rate_choices": [44100, 44100, 48000],
+      "audio_max_channel_count_choices": [2, 2],
+      "font_set_id": "macos",
+      "gpu_tier": "apple",
+      "taskbar_height": 25,
+      "max_touch_points_choices": [0]
+    },
+    {
+      "id": "macos-13-intel",
+      "weight": 5,
+      "os": "macos",
+      "os_version": "13.6",
+      "platform": "MacIntel",
+      "oscpu": "Intel Mac OS X 10.15",
+      "ua_template": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:{ffver}) Gecko/20100101 Firefox/{ffver}",
+      "cpu_cores_choices": [4, 6, 8, 8],
+      "screen_presets": [
+        [1440, 900],
+        [1680, 1050],
+        [1920, 1080],
+        [2560, 1600],
+        [2880, 1800]
+      ],
+      "dpr_choices": [2.0, 1.0, 2.0],
+      "color_depth_choices": [24, 30],
+      "audio_sample_rate_choices": [44100, 48000],
+      "audio_max_channel_count_choices": [2],
+      "font_set_id": "macos",
+      "gpu_tier": "intel_mac",
+      "taskbar_height": 25,
+      "max_touch_points_choices": [0]
+    },
+    {
+      "id": "linux-ubuntu-dev",
+      "weight": 3,
+      "os": "linux",
+      "os_version": "x86_64",
+      "platform": "Linux x86_64",
+      "oscpu": "Linux x86_64",
+      "ua_template": "Mozilla/5.0 (X11; Linux x86_64; rv:{ffver}) Gecko/20100101 Firefox/{ffver}",
+      "cpu_cores_choices": [4, 8, 8, 12, 16],
+      "screen_presets": [
+        [1920, 1080], [1920, 1080],
+        [2560, 1440],
+        [3840, 2160],
+        [1366, 768]
+      ],
+      "dpr_choices": [1.0, 1.0, 1.25],
+      "color_depth_choices": [24, 24, 30],
+      "audio_sample_rate_choices": [48000, 48000, 44100],
+      "audio_max_channel_count_choices": [2, 6],
+      "font_set_id": "linux",
+      "gpu_tier": "mixed",
+      "taskbar_height": 0,
+      "max_touch_points_choices": [0]
+    }
+  ]
+}

@@ -1,0 +1,130 @@
+{
+  "_comment": "Locale -> (timezone pool, geo centroid). Used when no proxy-derived geo is forced. Geo centroid = major city, with ±1° jitter applied by generator. Weights loosely based on web traffic share.",
+  "locales": [
+    {
+      "locale": "en-US", "language": "en", "region": "US", "weight": 30,
+      "languages": ["en-US", "en"],
+      "accept_language": "en-US,en;q=0.5",
+      "timezones": [
+        "America/New_York", "America/Chicago", "America/Denver",
+        "America/Los_Angeles", "America/Phoenix", "America/Indiana/Indianapolis"
+      ],
+      "geo_centroids": [
+        {"lat": 40.7128, "lon": -74.0060, "tz": "America/New_York"},
+        {"lat": 41.8781, "lon": -87.6298, "tz": "America/Chicago"},
+        {"lat": 34.0522, "lon": -118.2437, "tz": "America/Los_Angeles"},
+        {"lat": 39.7392, "lon": -104.9903, "tz": "America/Denver"},
+        {"lat": 33.4484, "lon": -112.0740, "tz": "America/Phoenix"}
+      ]
+    },
+    {
+      "locale": "en-GB", "language": "en", "region": "GB", "weight": 8,
+      "languages": ["en-GB", "en"],
+      "accept_language": "en-GB,en;q=0.5",
+      "timezones": ["Europe/London"],
+      "geo_centroids": [
+        {"lat": 51.5074, "lon": -0.1278, "tz": "Europe/London"},
+        {"lat": 53.4808, "lon": -2.2426, "tz": "Europe/London"}
+      ]
+    },
+    {
+      "locale": "fr-FR", "language": "fr", "region": "FR", "weight": 7,
+      "languages": ["fr-FR", "fr", "en-US", "en"],
+      "accept_language": "fr-FR,fr;q=0.8,en-US;q=0.5,en;q=0.3",
+      "timezones": ["Europe/Paris"],
+      "geo_centroids": [
+        {"lat": 48.8566, "lon": 2.3522, "tz": "Europe/Paris"},
+        {"lat": 45.7640, "lon": 4.8357, "tz": "Europe/Paris"},
+        {"lat": 43.2965, "lon": 5.3698, "tz": "Europe/Paris"}
+      ]
+    },
+    {
+      "locale": "de-DE", "language": "de", "region": "DE", "weight": 7,
+      "languages": ["de-DE", "de", "en-US", "en"],
+      "accept_language": "de-DE,de;q=0.8,en-US;q=0.5,en;q=0.3",
+      "timezones": ["Europe/Berlin"],
+      "geo_centroids": [
+        {"lat": 52.5200, "lon": 13.4050, "tz": "Europe/Berlin"},
+        {"lat": 48.1351, "lon": 11.5820, "tz": "Europe/Berlin"}
+      ]
+    },
+    {
+      "locale": "es-ES", "language": "es", "region": "ES", "weight": 5,
+      "languages": ["es-ES", "es", "en-US", "en"],
+      "accept_language": "es-ES,es;q=0.8,en-US;q=0.5,en;q=0.3",
+      "timezones": ["Europe/Madrid"],
+      "geo_centroids": [
+        {"lat": 40.4168, "lon": -3.7038, "tz": "Europe/Madrid"},
+        {"lat": 41.3851, "lon": 2.1734, "tz": "Europe/Madrid"}
+      ]
+    },
+    {
+      "locale": "it-IT", "language": "it", "region": "IT", "weight": 4,
+      "languages": ["it-IT", "it", "en-US", "en"],
+      "accept_language": "it-IT,it;q=0.8,en-US;q=0.5,en;q=0.3",
+      "timezones": ["Europe/Rome"],
+      "geo_centroids": [
+        {"lat": 41.9028, "lon": 12.4964, "tz": "Europe/Rome"},
+        {"lat": 45.4642, "lon": 9.1900, "tz": "Europe/Rome"}
+      ]
+    },
+    {
+      "locale": "pt-BR", "language": "pt", "region": "BR", "weight": 6,
+      "languages": ["pt-BR", "pt", "en-US", "en"],
+      "accept_language": "pt-BR,pt;q=0.8,en-US;q=0.5,en;q=0.3",
+      "timezones": ["America/Sao_Paulo"],
+      "geo_centroids": [
+        {"lat": -23.5505, "lon": -46.6333, "tz": "America/Sao_Paulo"},
+        {"lat": -22.9068, "lon": -43.1729, "tz": "America/Sao_Paulo"}
+      ]
+    },
+    {
+      "locale": "nl-NL", "language": "nl", "region": "NL", "weight": 3,
+      "languages": ["nl-NL", "nl", "en-US", "en"],
+      "accept_language": "nl-NL,nl;q=0.8,en-US;q=0.5,en;q=0.3",
+      "timezones": ["Europe/Amsterdam"],
+      "geo_centroids": [
+        {"lat": 52.3676, "lon": 4.9041, "tz": "Europe/Amsterdam"}
+      ]
+    },
+    {
+      "locale": "pl-PL", "language": "pl", "region": "PL", "weight": 3,
+      "languages": ["pl-PL", "pl", "en-US", "en"],
+      "accept_language": "pl-PL,pl;q=0.8,en-US;q=0.5,en;q=0.3",
+      "timezones": ["Europe/Warsaw"],
+      "geo_centroids": [
+        {"lat": 52.2297, "lon": 21.0122, "tz": "Europe/Warsaw"}
+      ]
+    },
+    {
+      "locale": "en-CA", "language": "en", "region": "CA", "weight": 3,
+      "languages": ["en-CA", "en", "fr-CA", "fr"],
+      "accept_language": "en-CA,en;q=0.8,fr-CA;q=0.5,fr;q=0.3",
+      "timezones": ["America/Toronto", "America/Vancouver", "America/Montreal"],
+      "geo_centroids": [
+        {"lat": 43.6532, "lon": -79.3832, "tz": "America/Toronto"},
+        {"lat": 49.2827, "lon": -123.1207, "tz": "America/Vancouver"},
+        {"lat": 45.5017, "lon": -73.5673, "tz": "America/Montreal"}
+      ]
+    },
+    {
+      "locale": "ja-JP", "language": "ja", "region": "JP", "weight": 4,
+      "languages": ["ja-JP", "ja", "en-US", "en"],
+      "accept_language": "ja-JP,ja;q=0.8,en-US;q=0.5,en;q=0.3",
+      "timezones": ["Asia/Tokyo"],
+      "geo_centroids": [
+        {"lat": 35.6762, "lon": 139.6503, "tz": "Asia/Tokyo"}
+      ]
+    },
+    {
+      "locale": "en-AU", "language": "en", "region": "AU", "weight": 2,
+      "languages": ["en-AU", "en"],
+      "accept_language": "en-AU,en;q=0.5",
+      "timezones": ["Australia/Sydney", "Australia/Melbourne", "Australia/Perth"],
+      "geo_centroids": [
+        {"lat": -33.8688, "lon": 151.2093, "tz": "Australia/Sydney"},
+        {"lat": -37.8136, "lon": 144.9631, "tz": "Australia/Melbourne"}
+      ]
+    }
+  ]
+}

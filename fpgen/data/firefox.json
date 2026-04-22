@@ -1,0 +1,9 @@
+{
+  "_comment": "Firefox versions Camoufox currently ships builds for. Update when new builds land. buildID is the YYYYMMDDHHMMSS of the release.",
+  "versions": [
+    {"version": "142.0.1", "build_id": "20240826000000", "product_sub": "20100101"},
+    {"version": "141.0.3", "build_id": "20240729000000", "product_sub": "20100101"},
+    {"version": "140.0.4", "build_id": "20240701000000", "product_sub": "20100101"}
+  ],
+  "default": "142.0.1"
+}
