@@ -1,0 +1,51 @@
+{
+  "_comment": "Copy to config.json, fill DISCORD_TOKEN, adjust channels + rules.",
+  "discord": {
+    "token": "${DISCORD_TOKEN}",
+    "channels": []
+  },
+  "python_root": "/home/you/camoufox",
+  "python_executable": "python3",
+  "dry_run": false,
+  "rules": [
+    {
+      "name": "ticketmaster-any-drop",
+      "match": {
+        "content_regex": "https?://(?:[\\w.-]+\\.)?ticketmaster\\.[a-z]+/\\S*"
+      },
+      "action": {
+        "type": "launch-session",
+        "profile_strategy": "tag",
+        "profile_tag": "ticketmaster",
+        "proxy_strategy": "bound",
+        "headless": false
+      }
+    },
+    {
+      "name": "adonis-bot-bypass-link",
+      "match": {
+        "author": "adonis",
+        "content_regex": "(?:bypass|checkout|goto)\\s+(https?://\\S+)",
+        "url_capture_group": 1
+      },
+      "action": {
+        "type": "launch-session",
+        "profile_strategy": "tag",
+        "profile_tag": "adonis",
+        "proxy_strategy": "bound"
+      }
+    },
+    {
+      "name": "any-drop-in-drops-channel",
+      "match": {
+        "channel": "drops"
+      },
+      "action": {
+        "type": "launch-session",
+        "profile_strategy": "os",
+        "profile_os": "windows",
+        "proxy_strategy": "round-robin"
+      }
+    }
+  ]
+}
