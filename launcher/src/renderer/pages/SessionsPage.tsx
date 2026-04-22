@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { api } from "../api";
 import { StatusBadge } from "../components/Badge";
 import { BatchLaunchModal } from "../components/BatchLaunchModal";
@@ -9,8 +9,13 @@ import { useAppStore } from "../store";
 export function SessionsPage() {
   const {
     sessions, sessionsLoading, sessionsError, refreshSessions,
-    refreshProfiles, refreshProxies, showToast,
+    profiles, refreshProfiles, refreshProxies, showToast,
   } = useAppStore();
+
+  const profileMap = useMemo(
+    () => new Map(profiles.map((p) => [p.id, p])),
+    [profiles],
+  );
   const [showLaunch, setShowLaunch] = useState(false);
   const [showBatch, setShowBatch] = useState(false);
   const [logFor, setLogFor] = useState<string | null>(null);
@@ -121,7 +126,9 @@ export function SessionsPage() {
                 <td className="px-4 py-2"><StatusBadge status={s.status} /></td>
                 <td className="px-4 py-2 font-mono text-xs">{s.id}</td>
                 <td className="px-4 py-2 font-mono text-xs">{s.pid}</td>
-                <td className="px-4 py-2 text-xs">{s.profile_id}</td>
+                <td className="px-4 py-2 text-xs" title={s.profile_id}>
+                  {profileMap.get(s.profile_id)?.name ?? s.profile_id.slice(0, 8)}
+                </td>
                 <td className="px-4 py-2 text-xs">{s.proxy_id || "-"}</td>
                 <td className="px-4 py-2 text-xs truncate max-w-xs">{s.url || "-"}</td>
                 <td className="px-4 py-2 text-xs text-surface-100/60">

@@ -178,6 +178,8 @@ class SessionManager:
             stdin=subprocess.DEVNULL,
             start_new_session=True,  # detach from parent
         )
+        # Close in the parent — the child inherited the FD and owns it now.
+        log_fh.close()
 
         s = Session(
             id=session_id,

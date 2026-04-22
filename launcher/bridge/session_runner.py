@@ -129,7 +129,9 @@ def _mark_running(session_id: str) -> None:
     try:
         data = json.loads(path.read_text())
         data["status"] = "running"
-        path.write_text(json.dumps(data, indent=2, sort_keys=True))
+        tmp = path.with_suffix(".json.tmp")
+        tmp.write_text(json.dumps(data, indent=2, sort_keys=True))
+        os.replace(tmp, path)
     except (OSError, json.JSONDecodeError) as e:
         _log(f"could not mark running: {e}")
 
