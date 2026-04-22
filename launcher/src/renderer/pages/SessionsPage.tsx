@@ -1,15 +1,26 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
 import { StatusBadge } from "../components/Badge";
+import { BatchLaunchModal } from "../components/BatchLaunchModal";
 import { LaunchSessionModal } from "../components/LaunchSessionModal";
 import { Modal } from "../components/Modal";
 import { useAppStore } from "../store";
 
 export function SessionsPage() {
-  const { sessions, sessionsLoading, sessionsError, refreshSessions, showToast } = useAppStore();
+  const {
+    sessions, sessionsLoading, sessionsError, refreshSessions,
+    refreshProfiles, refreshProxies, showToast,
+  } = useAppStore();
   const [showLaunch, setShowLaunch] = useState(false);
+  const [showBatch, setShowBatch] = useState(false);
   const [logFor, setLogFor] = useState<string | null>(null);
   const [logText, setLogText] = useState("");
+
+  // Preload profiles and proxies for the batch modal.
+  useEffect(() => {
+    refreshProfiles();
+    refreshProxies();
+  }, [refreshProfiles, refreshProxies]);
 
   // Poll sessions every 2s so status transitions show up without a manual refresh.
   useEffect(() => {
@@ -69,6 +80,9 @@ export function SessionsPage() {
           <button type="button" className="btn-ghost" onClick={prune}>Prune stopped</button>
           <button type="button" className="btn-ghost" onClick={() => refreshSessions()} disabled={sessionsLoading}>
             Refresh
+          </button>
+          <button type="button" className="btn-ghost" onClick={() => setShowBatch(true)}>
+            + Batch
           </button>
           <button type="button" className="btn-primary" onClick={() => setShowLaunch(true)}>
             + Launch
@@ -132,6 +146,7 @@ export function SessionsPage() {
       </div>
 
       <LaunchSessionModal open={showLaunch} onClose={() => setShowLaunch(false)} />
+      <BatchLaunchModal open={showBatch} onClose={() => setShowBatch(false)} />
 
       <Modal
         open={logFor !== null}

@@ -260,6 +260,136 @@ def session_log(args: Dict[str, Any]) -> Dict[str, Any]:
     return {"id": args["id"], "log": text}
 
 
+# --- profile <-> proxy binding ---
+
+def bind_profile_proxy(args: Dict[str, Any]) -> Dict[str, Any]:
+    """Write profile.proxy_id = proxy_id (or None to unbind). Validates both exist."""
+    pstore = _profile_store()
+    profile = pstore.load(args["profile_id"])
+    proxy_id = args.get("proxy_id")
+    if proxy_id:
+        _proxy_store().load(proxy_id)  # validate existence
+        profile.proxy_id = proxy_id
+    else:
+        profile.proxy_id = None
+    pstore.save(profile)
+    return {"profile_id": profile.id, "proxy_id": profile.proxy_id}
+
+
+# --- batch launch ---
+
+def batch_launch_session(args: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Launch N sessions at once. Each profile can be paired with a proxy via
+    one of three strategies:
+      - 'bound'     : use each profile's profile.proxy_id (skip if unset)
+      - 'round-robin': cycle through the proxy pool
+      - 'fixed'     : all sessions get the same proxy_id
+      - 'none'      : no proxy
+
+    args:
+      profile_ids: list[str]
+      strategy: 'bound'|'round-robin'|'fixed'|'none'  (default: 'bound')
+      proxy_id: str  (required if strategy=='fixed')
+      proxy_filter: dict (optional: {provider, country, tag, status} passed to proxypool.list)
+      url: str
+      headless: bool
+    """
+    mgr = _session_mgr()
+    pstore = _profile_store()
+    xstore = _proxy_store()
+
+    profile_ids = args.get("profile_ids") or []
+    if not profile_ids:
+        raise ValueError("profile_ids must be a non-empty list")
+    strategy = args.get("strategy", "bound")
+    url = args.get("url")
+    headless = bool(args.get("headless", False))
+
+    proxy_pool: list = []
+    if strategy == "round-robin":
+        filt = args.get("proxy_filter") or {}
+        proxy_pool = xstore.list(
+            status=filt.get("status", "active"),
+            provider=filt.get("provider"),
+            tag=filt.get("tag"),
+            country=filt.get("country"),
+        )
+        if not proxy_pool:
+            raise ValueError("round-robin needs at least one matching proxy")
+    elif strategy == "fixed":
+        xstore.load(args["proxy_id"])  # validate
+
+    spawned = []
+    failures = []
+    for idx, pid in enumerate(profile_ids):
+        try:
+            profile = pstore.load(pid)
+        except KeyError as e:
+            failures.append({"profile_id": pid, "error": str(e)})
+            continue
+
+        proxy_id = None
+        if strategy == "bound":
+            proxy_id = profile.proxy_id
+        elif strategy == "round-robin":
+            proxy_id = proxy_pool[idx % len(proxy_pool)]["id"]
+        elif strategy == "fixed":
+            proxy_id = args.get("proxy_id")
+
+        try:
+            s = mgr.spawn(profile_id=pid, proxy_id=proxy_id, url=url, headless=headless)
+            spawned.append(mgr.as_dict(s))
+        except Exception as e:  # noqa: BLE001 — batch must not bail on one failure
+            failures.append({"profile_id": pid, "error": f"{type(e).__name__}: {e}"})
+
+    return {"spawned": spawned, "failures": failures, "count": len(spawned)}
+
+
+# --- dashboard summary ---
+
+def dashboard_summary(args: Dict[str, Any]) -> Dict[str, Any]:
+    """Aggregate metrics for the dashboard tab."""
+    pstore = _profile_store()
+    xstore = _proxy_store()
+    mgr = _session_mgr()
+
+    profiles = pstore.list()
+    proxies = xstore.list()
+    sessions = mgr.list()
+
+    proxies_by_status: Dict[str, int] = {}
+    for p in proxies:
+        proxies_by_status[p["status"]] = proxies_by_status.get(p["status"], 0) + 1
+
+    sessions_by_status: Dict[str, int] = {}
+    for s in sessions:
+        sessions_by_status[s.status] = sessions_by_status.get(s.status, 0) + 1
+
+    profiles_by_os: Dict[str, int] = {}
+    for p in profiles:
+        profiles_by_os[p.get("os", "?")] = profiles_by_os.get(p.get("os", "?"), 0) + 1
+
+    bound_profiles = sum(1 for p in profiles if p.get("proxy_id"))
+
+    return {
+        "profiles": {
+            "total": len(profiles),
+            "by_os": profiles_by_os,
+            "bound_to_proxy": bound_profiles,
+        },
+        "proxies": {
+            "total": len(proxies),
+            "by_status": proxies_by_status,
+        },
+        "sessions": {
+            "total": len(sessions),
+            "by_status": sessions_by_status,
+            "running": sessions_by_status.get("running", 0) + sessions_by_status.get("starting", 0),
+        },
+    }
+
+
 # --- helpers ---
 
 def _profile_to_dict(p: fpgen.Profile) -> Dict[str, Any]:
@@ -291,4 +421,9 @@ COMMANDS = {
     "kill-all-sessions": kill_all_sessions,
     "prune-sessions": prune_sessions,
     "session-log": session_log,
+    "batch-launch-session": batch_launch_session,
+
+    "bind-profile-proxy": bind_profile_proxy,
+
+    "dashboard-summary": dashboard_summary,
 }

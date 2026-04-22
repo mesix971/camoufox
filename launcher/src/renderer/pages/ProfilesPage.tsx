@@ -1,15 +1,31 @@
 import { useEffect, useState } from "react";
+import type { ProfileSummary } from "../../shared/types";
 import { api } from "../api";
+import { BindProxyModal } from "../components/BindProxyModal";
 import { LaunchSessionModal } from "../components/LaunchSessionModal";
 import { NewProfileModal } from "../components/NewProfileModal";
 import { useAppStore } from "../store";
 
 export function ProfilesPage() {
-  const { profiles, profilesLoading, profilesError, refreshProfiles, showToast } = useAppStore();
+  const {
+    profiles, profilesLoading, profilesError, refreshProfiles,
+    proxies, refreshProxies, showToast,
+  } = useAppStore();
   const [showNew, setShowNew] = useState(false);
   const [launchFor, setLaunchFor] = useState<string | null>(null);
+  const [bindFor, setBindFor] = useState<ProfileSummary | null>(null);
 
-  useEffect(() => { refreshProfiles(); }, [refreshProfiles]);
+  useEffect(() => {
+    refreshProfiles();
+    refreshProxies();
+  }, [refreshProfiles, refreshProxies]);
+
+  const proxyLabel = (id: string | null): string => {
+    if (!id) return "-";
+    const p = proxies.find((x) => x.id === id);
+    if (!p) return id;
+    return `${p.label} [${p.status}]`;
+  };
 
   const remove = async (id: string) => {
     if (!confirm(`Delete profile ${id}?`)) return;
@@ -72,7 +88,7 @@ export function ProfilesPage() {
                 <td className="px-4 py-2 font-mono text-xs text-surface-100/70">{p.archetype_id}</td>
                 <td className="px-4 py-2">{p.os}</td>
                 <td className="px-4 py-2">{p.locale}</td>
-                <td className="px-4 py-2 text-xs text-surface-100/60">{p.proxy_id || "-"}</td>
+                <td className="px-4 py-2 text-xs text-surface-100/60">{proxyLabel(p.proxy_id)}</td>
                 <td className="px-4 py-2 text-xs">{p.tags.join(", ") || "-"}</td>
                 <td className="px-4 py-2 text-xs text-surface-100/60">
                   {p.last_used_at ? new Date(p.last_used_at).toLocaleString() : "-"}
@@ -80,6 +96,13 @@ export function ProfilesPage() {
                 <td className="px-4 py-2 text-right">{p.use_count}</td>
                 <td className="px-4 py-2 text-right">
                   <div className="flex items-center justify-end gap-1">
+                    <button
+                      type="button"
+                      className="btn-ghost !py-1 !text-xs"
+                      onClick={() => setBindFor(p)}
+                    >
+                      Proxy
+                    </button>
                     <button
                       type="button"
                       className="btn-primary !py-1 !text-xs"
@@ -107,6 +130,11 @@ export function ProfilesPage() {
         open={launchFor !== null}
         onClose={() => setLaunchFor(null)}
         initialProfileId={launchFor}
+      />
+      <BindProxyModal
+        open={bindFor !== null}
+        onClose={() => setBindFor(null)}
+        profile={bindFor}
       />
     </div>
   );

@@ -51,6 +51,19 @@ const api = {
   killSession: (id: string) => invoke(IPC.killSession, { id }),
   sessionLog: (id: string, lines = 200) => invoke(IPC.sessionLog, { id, lines }),
   pruneSessions: () => invoke(IPC.pruneSessions),
+  batchLaunchSession: (args: {
+    profile_ids: string[];
+    strategy: "bound" | "round-robin" | "fixed" | "none";
+    proxy_id?: string;
+    proxy_filter?: { provider?: string; country?: string; tag?: string; status?: string };
+    url?: string;
+    headless?: boolean;
+  }) => invoke(IPC.batchLaunchSession, args),
+
+  // binding + dashboard
+  bindProfileProxy: (args: { profile_id: string; proxy_id: string | null }) =>
+    invoke(IPC.bindProfileProxy, args),
+  dashboardSummary: () => invoke(IPC.dashboardSummary),
 };
 
 contextBridge.exposeInMainWorld("api", api);

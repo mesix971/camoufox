@@ -137,6 +137,35 @@ export const IPC = {
   killSession: "kill-session",
   sessionLog: "session-log",
   pruneSessions: "prune-sessions",
+  batchLaunchSession: "batch-launch-session",
+
+  bindProfileProxy: "bind-profile-proxy",
+  dashboardSummary: "dashboard-summary",
 } as const;
+
+export interface DashboardSummary {
+  profiles: {
+    total: number;
+    by_os: Record<string, number>;
+    bound_to_proxy: number;
+  };
+  proxies: {
+    total: number;
+    by_status: Record<string, number>;
+  };
+  sessions: {
+    total: number;
+    by_status: Record<string, number>;
+    running: number;
+  };
+}
+
+export interface BatchLaunchResult {
+  spawned: Session[];
+  failures: Array<{ profile_id: string; error: string }>;
+  count: number;
+}
+
+export type ProxyStrategy = "bound" | "round-robin" | "fixed" | "none";
 
 export type IpcChannel = typeof IPC[keyof typeof IPC];

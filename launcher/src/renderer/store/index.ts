@@ -7,7 +7,7 @@ import type {
 import { api } from "../api";
 
 export interface AppState {
-  tab: "profiles" | "proxies" | "sessions";
+  tab: "dashboard" | "profiles" | "proxies" | "sessions";
   setTab: (t: AppState["tab"]) => void;
 
   profiles: ProfileSummary[];
@@ -35,7 +35,7 @@ export interface AppState {
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
-  tab: "profiles",
+  tab: "dashboard",
   setTab: (tab) => set({ tab }),
 
   profiles: [],

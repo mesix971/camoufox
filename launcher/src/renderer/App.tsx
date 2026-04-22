@@ -1,9 +1,11 @@
+import { DashboardPage } from "./pages/DashboardPage";
 import { ProfilesPage } from "./pages/ProfilesPage";
 import { ProxiesPage } from "./pages/ProxiesPage";
 import { SessionsPage } from "./pages/SessionsPage";
 import { useAppStore } from "./store";
 
 const TABS = [
+  { id: "dashboard" as const, label: "Dashboard" },
   { id: "profiles" as const, label: "Profiles" },
   { id: "proxies" as const, label: "Proxies" },
   { id: "sessions" as const, label: "Sessions" },
@@ -36,6 +38,7 @@ export function App() {
       </header>
 
       <main className="flex-1 overflow-hidden">
+        {tab === "dashboard" && <DashboardPage />}
         {tab === "profiles" && <ProfilesPage />}
         {tab === "proxies" && <ProxiesPage />}
         {tab === "sessions" && <SessionsPage />}
