@@ -100,7 +100,11 @@ jobs:
   release:
     needs: build
     runs-on: ubuntu-22.04
-    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    # Publish whatever artifacts succeeded, even if one platform fails or
+    # gets stuck waiting for a runner (macOS runners can queue for 10+ min).
+    if: |
+      always() &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
 
     steps:
       - uses: actions/checkout@v4
