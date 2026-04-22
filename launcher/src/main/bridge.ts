@@ -3,12 +3,33 @@
 // on stdout and exits. Non-zero exit with error JSON = rejection.
 
 import { spawn } from "node:child_process";
+import { existsSync } from "node:fs";
 import { resolve } from "node:path";
+import { app } from "electron";
 import type { BridgeError, IpcChannel } from "../shared/types";
 
-// At runtime: __dirname = launcher/dist/main/main
-// Repo root (camoufox) = four levels up.
-const REPO_ROOT = resolve(__dirname, "..", "..", "..", "..");
+// Resolve the Python root (the dir containing fpgen/, proxypool/, launcher/).
+//   Dev mode:     __dirname = <repo>/launcher/dist/main/main
+//                 Python root = <repo>                    (four levels up)
+//   Packaged:     __dirname = <app>/Resources/app.asar.unpacked/dist/main/main
+//                 Python root = <app>/Resources/python    (from extraResources)
+function resolvePythonRoot(): string {
+  if (app.isPackaged) {
+    return resolve(process.resourcesPath, "python");
+  }
+  const devRoot = resolve(__dirname, "..", "..", "..", "..");
+  // Sanity check the dev path: fpgen must exist there.
+  if (existsSync(resolve(devRoot, "fpgen", "__init__.py"))) {
+    return devRoot;
+  }
+  // Fallback: CAMOUFOX_REPO env var explicit override.
+  if (process.env.CAMOUFOX_REPO) {
+    return process.env.CAMOUFOX_REPO;
+  }
+  return devRoot;
+}
+
+const PYTHON_ROOT = resolvePythonRoot();
 const PYTHON = process.env.CAMOUFOX_PYTHON || "python3";
 
 export interface BridgeOptions {
@@ -35,10 +56,10 @@ export async function callBridge<T = unknown>(
 
   return new Promise<T>((resolvePromise, reject) => {
     const child = spawn(PYTHON, argv, {
-      cwd: REPO_ROOT,
+      cwd: PYTHON_ROOT,
       env: {
         ...process.env,
-        PYTHONPATH: `${REPO_ROOT}${process.env.PYTHONPATH ? ":" + process.env.PYTHONPATH : ""}`,
+        PYTHONPATH: `${PYTHON_ROOT}${process.env.PYTHONPATH ? ":" + process.env.PYTHONPATH : ""}`,
       },
     });
 
