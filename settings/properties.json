@@ -106,5 +106,25 @@
   { "property": "debug", "type": "bool" },
   { "property": "websocket:remapping:enabled", "type": "bool" },
   { "property": "websocket:remapping:manualPortMappings", "type": "array" },
-  { "property": "websocket:remapping:basePort", "type": "uint" }
+  { "property": "websocket:remapping:basePort", "type": "uint" },
+
+  { "property": "http2:settings:headerTableSize", "type": "uint" },
+  { "property": "http2:settings:enablePush", "type": "bool" },
+  { "property": "http2:settings:maxConcurrentStreams", "type": "uint" },
+  { "property": "http2:settings:initialWindowSize", "type": "uint" },
+  { "property": "http2:settings:maxFrameSize", "type": "uint" },
+  { "property": "http2:settings:maxHeaderListSize", "type": "uint" },
+  { "property": "http2:settings:customOrder", "type": "array" },
+  { "property": "http2:window:initial", "type": "uint" },
+  { "property": "http2:priority:weight", "type": "uint" },
+
+  { "property": "tls:extensions:order", "type": "array" },
+  { "property": "tls:extensions:shuffle", "type": "bool" },
+  { "property": "tls:grease:enabled", "type": "bool" },
+  { "property": "tls:cipherSuites:order", "type": "array" },
+  { "property": "tls:alpn:order", "type": "array" },
+
+  { "property": "creepjs:bypass:enabled", "type": "bool" },
+  { "property": "creepjs:bypass:fakeScore", "type": "double" },
+  { "property": "creepjs:bypass:hostPatterns", "type": "array" }
 ]

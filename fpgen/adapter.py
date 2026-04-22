@@ -107,4 +107,46 @@ def to_camoufox_config(p: Profile, include_build_id: bool = False) -> Dict[str, 
     if include_build_id and p.build_id:
         cfg["navigator.buildID"] = p.build_id
 
+    # P4: emit H2/TLS/creepjs overrides only when the Profile sets them.
+    # Absent keys let Firefox use its built-in defaults.
+    _emit_http2_settings(cfg, p)
+    if p.http2_window_initial is not None:
+        cfg["http2:window:initial"] = p.http2_window_initial
+    if p.http2_priority_weight is not None:
+        cfg["http2:priority:weight"] = p.http2_priority_weight
+    if p.tls_extensions_order is not None:
+        cfg["tls:extensions:order"] = list(p.tls_extensions_order)
+    if p.tls_extensions_shuffle is not None:
+        cfg["tls:extensions:shuffle"] = p.tls_extensions_shuffle
+    if p.tls_grease_enabled is not None:
+        cfg["tls:grease:enabled"] = p.tls_grease_enabled
+    if p.tls_cipher_suites_order is not None:
+        cfg["tls:cipherSuites:order"] = list(p.tls_cipher_suites_order)
+    if p.tls_alpn_order is not None:
+        cfg["tls:alpn:order"] = list(p.tls_alpn_order)
+    if p.creepjs_bypass_enabled is not None:
+        cfg["creepjs:bypass:enabled"] = p.creepjs_bypass_enabled
+    if p.creepjs_bypass_fake_score is not None:
+        cfg["creepjs:bypass:fakeScore"] = p.creepjs_bypass_fake_score
+    if p.creepjs_bypass_host_patterns is not None:
+        cfg["creepjs:bypass:hostPatterns"] = list(p.creepjs_bypass_host_patterns)
+
     return cfg
+
+
+def _emit_http2_settings(cfg: Dict[str, Any], p) -> None:
+    """Unpack profile.http2_settings (dict) into the flat namespaced keys."""
+    if not p.http2_settings:
+        return
+    mapping = {
+        "headerTableSize": "http2:settings:headerTableSize",
+        "enablePush": "http2:settings:enablePush",
+        "maxConcurrentStreams": "http2:settings:maxConcurrentStreams",
+        "initialWindowSize": "http2:settings:initialWindowSize",
+        "maxFrameSize": "http2:settings:maxFrameSize",
+        "maxHeaderListSize": "http2:settings:maxHeaderListSize",
+        "customOrder": "http2:settings:customOrder",
+    }
+    for src, dst in mapping.items():
+        if src in p.http2_settings:
+            cfg[dst] = p.http2_settings[src]

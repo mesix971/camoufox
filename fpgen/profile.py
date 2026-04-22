@@ -92,6 +92,21 @@ class Profile:
     dnt: str = "unspecified"
     global_privacy_control: bool = False
 
+    # P4 network/TLS/bypass overrides. All None => emit nothing (Firefox
+    # default). Set only when you need a specific H2/TLS fingerprint or
+    # script blocklist; random values WILL break connections.
+    http2_settings: Optional[dict] = None
+    http2_window_initial: Optional[int] = None
+    http2_priority_weight: Optional[int] = None
+    tls_extensions_order: Optional[List[str]] = None
+    tls_extensions_shuffle: Optional[bool] = None
+    tls_grease_enabled: Optional[bool] = None
+    tls_cipher_suites_order: Optional[List[str]] = None
+    tls_alpn_order: Optional[List[str]] = None
+    creepjs_bypass_enabled: Optional[bool] = None
+    creepjs_bypass_fake_score: Optional[float] = None
+    creepjs_bypass_host_patterns: Optional[List[str]] = None
+
     def to_json(self) -> str:
         return json.dumps(asdict(self), indent=2, sort_keys=True)
 

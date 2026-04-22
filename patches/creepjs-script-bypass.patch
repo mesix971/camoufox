@@ -1,0 +1,117 @@
+# CreepJS / fingerprint-script URL blocker — P4.4
+#
+# Intent: Some bot detection vendors embed CreepJS or similar fingerprint
+# probing libraries at known URLs. Rather than pretending the script ran
+# (which is hard — you'd have to fake its DOM output convincingly), this
+# patch lets profiles BLOCK script loads matching a regex list, so the
+# protected page sees "script failed to load" — a plausible state for a
+# real user on a flaky network or with an ad-blocker.
+#
+# Tradeoff: blocking a detector's script can ITSELF be a signal if the
+# detector counts missing scripts. Use sparingly and with a known list of
+# hosts where blocking is known-safe (e.g. your own pages that load
+# CreepJS for debugging).
+#
+# MaskConfig keys:
+#   creepjs:bypass:enabled        bool
+#   creepjs:bypass:hostPatterns   array[str]   (ECMAScript regex, matched
+#                                              against the full script URL)
+#   creepjs:bypass:fakeScore      double       (reserved — unused by this
+#                                              URL-block implementation;
+#                                              will drive future DOM-fake)
+#
+# NOTES FOR PATCH APPLICATION:
+# - Target file: dom/script/ScriptLoader.cpp (Firefox 142.x)
+# - The entry point we intercept is `ScriptLoader::ProcessExternalScript`
+#   or `ScriptLoader::PreparePreload` — the first place the URL is known
+#   and before network I/O starts.
+# - `MaskConfig.hpp` is already included via the surrounding build config
+#   (network-patches.patch adds `LOCAL_INCLUDES += ["/camoucfg"]` to
+#   netwerk/protocol/http/moz.build; dom/script needs the equivalent).
+#   This patch includes the moz.build change below.
+
+diff --git a/dom/script/moz.build b/dom/script/moz.build
+--- a/dom/script/moz.build
++++ b/dom/script/moz.build
+@@ -XX,0 +XX,3 @@
+ )
++
++# Camoufox: MaskConfig for creepjs-script-bypass.patch
++LOCAL_INCLUDES += ["/camoucfg"]
+
+diff --git a/dom/script/ScriptLoader.cpp b/dom/script/ScriptLoader.cpp
+--- a/dom/script/ScriptLoader.cpp
++++ b/dom/script/ScriptLoader.cpp
+@@ -20,6 +20,8 @@
+ #include "nsNetUtil.h"
+ #include "nsIScriptError.h"
+ #include "nsJSUtils.h"
++#include "MaskConfig.hpp"
++#include <regex>
+ #include "xpcpublic.h"
+
+# --- Helper: URL match against configured patterns ------------------------
+
+@@ -100,0 +102,35 @@
++namespace {
++
++// Camoufox: return true if the given URL matches any configured regex.
++// Cached after the first call so we don't recompile the regex list on
++// every script load.
++static bool CamoufoxShouldBlockScript(const nsACString& url) {
++  if (!MaskConfig::GetBool("creepjs:bypass:enabled").value_or(false)) {
++    return false;
++  }
++  static bool sInit = false;
++  static std::vector<std::regex> sPatterns;
++  if (!sInit) {
++    sInit = true;
++    for (const auto& pat : MaskConfig::GetStringList("creepjs:bypass:hostPatterns")) {
++      try {
++        sPatterns.emplace_back(pat, std::regex::ECMAScript | std::regex::icase);
++      } catch (const std::regex_error&) {
++        // Silently skip malformed patterns to avoid startup breakage.
++      }
++    }
++  }
++  if (sPatterns.empty()) return false;
++  const std::string sUrl(url.BeginReading(), url.Length());
++  for (const auto& rx : sPatterns) {
++    if (std::regex_search(sUrl, rx)) return true;
++  }
++  return false;
++}
++
++}  // namespace
+
+# --- Intercept at the point of first URL availability ---------------------
+
+@@ -XXX,6 +XXX,18 @@ nsresult ScriptLoader::ProcessExternalScript(
+     nsIScriptElement* aElement, ScriptKind aScriptKind,
+     const nsAString& aTypeAttr, nsIContent* aScriptContent) {
++  // Camoufox: short-circuit loads matching the configured blocklist.
++  // We fail the load so the page's error handler fires naturally — the
++  // same state as an ad-blocker or a 404. Returning NS_OK would leave the
++  // element in a pending state forever.
++  nsCOMPtr<nsIURI> scriptUri;
++  aElement->GetScriptURI(getter_AddRefs(scriptUri));
++  if (scriptUri) {
++    nsAutoCString spec;
++    scriptUri->GetSpec(spec);
++    if (CamoufoxShouldBlockScript(spec)) {
++      return NS_ERROR_CONTENT_BLOCKED;
++    }
++  }
+
+   NS_ENSURE_ARG(aElement);
+
+# NOTES:
+# - `NS_ERROR_CONTENT_BLOCKED` (= 0x805d0006) is the standard result for
+#   blocked content; the DOM fires an `error` event on the <script> which
+#   is exactly what happens with an ad-blocker or network failure.
+# - If `GetScriptURI` is not the accessor in your Firefox revision, try
+#   `GetScriptTextBuffer`, `GetScriptSource`, or `GetElementURI`. The
+#   important property is "we have the URL before fetch starts".
+# - For the future fake-score implementation (currently unused), see
+#   docs/P4_CREEPJS_FAKE_SCORE.md — it requires injecting a stub script
+#   into the document that shadows the real creepjs global.

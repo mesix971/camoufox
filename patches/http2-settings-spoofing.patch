@@ -1,0 +1,164 @@
+# HTTP/2 SETTINGS frame spoofing — P4.1
+#
+# Intent: Firefox sends a fixed set of HTTP/2 SETTINGS values on every
+# connection. DataDome, Cloudflare and other WAFs fingerprint this exact
+# set (SETTINGS_INITIAL_WINDOW_SIZE=131072, SETTINGS_MAX_FRAME_SIZE absent,
+# SETTINGS_ENABLE_PUSH=0, etc.) and flag anomalies immediately. This patch
+# makes every SETTINGS value configurable via MaskConfig so profiles can
+# mimic Chrome / Safari / mobile-Firefox SETTINGS frames, or randomise
+# within realistic ranges per-profile.
+#
+# MaskConfig keys added (all optional; absent => Firefox default):
+#   http2:settings:headerTableSize         uint
+#   http2:settings:enablePush              bool
+#   http2:settings:maxConcurrentStreams    uint
+#   http2:settings:initialWindowSize       uint
+#   http2:settings:maxFrameSize            uint
+#   http2:settings:maxHeaderListSize       uint
+#   http2:settings:customOrder             array[str]  (setting-id order)
+#   http2:window:initial                   uint        (conn-level flow control)
+#
+# NOTES FOR PATCH APPLICATION:
+# - Target file: netwerk/protocol/http/Http2Session.cpp (Firefox 142.x)
+# - The moz.build include for LOCAL_INCLUDES += ["/camoucfg"] is already
+#   added by network-patches.patch. No additional moz.build change needed.
+# - Line numbers here are from Playwright's Firefox 142 fork commit; if a
+#   hunk fails, run `patch -p1 --fuzz=3` or re-generate with `make dir`.
+# - The protocol SETTINGS identifier constants are:
+#       SETTINGS_TYPE_HEADER_TABLE_SIZE      = 1
+#       SETTINGS_TYPE_ENABLE_PUSH            = 2
+#       SETTINGS_TYPE_MAX_CONCURRENT_STREAMS = 3
+#       SETTINGS_TYPE_INITIAL_WINDOW_SIZE    = 4
+#       SETTINGS_TYPE_MAX_FRAME_SIZE         = 5
+#       SETTINGS_TYPE_MAX_HEADER_LIST_SIZE   = 6
+#   customOrder is an array of these decimal IDs as strings, used only if
+#   set; otherwise the default order (1,2,3,4,5,6) is preserved.
+
+diff --git a/netwerk/protocol/http/Http2Session.cpp b/netwerk/protocol/http/Http2Session.cpp
+--- a/netwerk/protocol/http/Http2Session.cpp
++++ b/netwerk/protocol/http/Http2Session.cpp
+@@ -7,6 +7,7 @@
+ // Log on level :5, instead of default :4.
+ #undef LOG
+ #define LOG(args) LOG5(args)
++#include "MaskConfig.hpp"
+ #include "Http2Session.h"
+
+ #include "mozilla/EndianUtils.h"
+@@ -30,6 +31,11 @@
+ #include "nsSocketTransportService2.h"
+ #include "nsString.h"
+ #include "nsThreadUtils.h"
++#include <algorithm>
++#include <array>
++#include <cstdlib>
++#include <string>
++#include <vector>
+ #include "prnetdb.h"
+ #include "sslerr.h"
+ #include "sslt.h"
+
+# --- Replace SendSettingsFrame body with a MaskConfig-aware version. -------
+#
+# Original (approximate; exact form differs across Firefox revisions):
+#
+#   void Http2Session::SendSettingsFrame() {
+#     // Build a settings frame with the default values Firefox advertises.
+#     CreateFrameHeader(...);
+#     NetworkEndian::writeUint16(...); // id
+#     NetworkEndian::writeUint32(...); // value
+#     ...
+#   }
+#
+# We keep Firefox's defaults unless a MaskConfig override exists. If the
+# caller provided http2:settings:customOrder we emit SETTINGS entries in
+# that order; otherwise we emit in the canonical id order.
+
+@@ -XXX,0 +XXX,XXX @@ void Http2Session::SendSettingsFrame() {
++  // --- Camoufox: HTTP/2 SETTINGS frame spoofing ---------------------------
++  // Read overrides from MaskConfig. Any key that is unset keeps the Firefox
++  // default. The emitted order follows http2:settings:customOrder if set.
++  struct H2Setting { uint16_t id; uint32_t value; bool emit; };
++  std::array<H2Setting, 6> settings = {{
++      {1, /*HEADER_TABLE_SIZE default*/ 65536u, true},
++      {2, /*ENABLE_PUSH default*/       0u,     true},
++      {3, /*MAX_CONCURRENT_STREAMS*/    100u,   false}, // client-side usually omits
++      {4, /*INITIAL_WINDOW_SIZE*/       131072u, true},
++      {5, /*MAX_FRAME_SIZE*/            16384u, false},
++      {6, /*MAX_HEADER_LIST_SIZE*/      393216u, false},
++  }};
++  auto applyUint = [&](uint16_t id, const char* key) {
++    if (auto v = MaskConfig::GetUint32(key)) {
++      for (auto& s : settings) {
++        if (s.id == id) { s.value = v.value(); s.emit = true; break; }
++      }
++    }
++  };
++  auto applyBool = [&](uint16_t id, const char* key) {
++    if (auto v = MaskConfig::GetBool(key)) {
++      for (auto& s : settings) {
++        if (s.id == id) { s.value = v.value() ? 1u : 0u; s.emit = true; break; }
++      }
++    }
++  };
++  applyUint(1, "http2:settings:headerTableSize");
++  applyBool(2, "http2:settings:enablePush");
++  applyUint(3, "http2:settings:maxConcurrentStreams");
++  applyUint(4, "http2:settings:initialWindowSize");
++  applyUint(5, "http2:settings:maxFrameSize");
++  applyUint(6, "http2:settings:maxHeaderListSize");
++
++  auto order = MaskConfig::GetStringList("http2:settings:customOrder");
++  std::vector<uint16_t> outOrder;
++  if (!order.empty()) {
++    for (const auto& s : order) {
++      char* end = nullptr;
++      long parsed = std::strtol(s.c_str(), &end, 10);
++      if (end != s.c_str() && parsed > 0 && parsed < 0xFFFF) {
++        outOrder.push_back(static_cast<uint16_t>(parsed));
++      }
++    }
++  } else {
++    for (const auto& s : settings) if (s.emit) outOrder.push_back(s.id);
++  }
++
++  // Count payload length (6 bytes per entry: 2 id + 4 value).
++  uint32_t payloadBytes = 0;
++  for (uint16_t id : outOrder) {
++    for (const auto& s : settings) {
++      if (s.id == id && s.emit) { payloadBytes += 6; break; }
++    }
++  }
++
++  static const uint8_t kSettingsFrameType = 0x4;
++  char* packet = EnsureOutputBuffer(kFrameHeaderBytes + payloadBytes);
++  CreateFrameHeader(packet, payloadBytes, kSettingsFrameType, 0, 0);
++  char* cursor = packet + kFrameHeaderBytes;
++  for (uint16_t id : outOrder) {
++    for (const auto& s : settings) {
++      if (s.id == id && s.emit) {
++        NetworkEndian::writeUint16(cursor, s.id);
++        NetworkEndian::writeUint32(cursor + 2, s.value);
++        cursor += 6;
++        break;
++      }
++    }
++  }
++  mOutputQueueUsed += kFrameHeaderBytes + payloadBytes;
++  FlushOutputQueue();
++  return;
++  // --- end Camoufox ------------------------------------------------------
+
+# --- Also wrap the initial connection window so it's configurable. --------
+
+@@ -YYY,0 +YYY,XXX @@ nsresult Http2Session::ReadSegmentsAgain(...) {
+   // Connection-level initial window override.
++  if (auto v = MaskConfig::GetUint32("http2:window:initial")) {
++    mServerInitialStreamWindow = v.value();
++    mLocalSessionWindow = v.value();
++  }
+
+# NOTE: the second hunk is illustrative of where to inject the connection
+# window override. If the exact function changes between FF versions,
+# relocate the `mServerInitialStreamWindow` assignment into the nearest
+# hunk that initializes window state and keep the MaskConfig lookup.

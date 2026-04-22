@@ -1,0 +1,164 @@
+# TLS ClientHello extension order & GREASE spoofing — P4.2
+#
+# Intent: Firefox's NSS sends TLS extensions in a fixed order, which defines
+# the JA3/JA4 fingerprint. Bot detection (Cloudflare Turnstile, Akamai,
+# Imperva, PerimeterX) categorises traffic by JA4_a/JA4_b/JA4_c, so two
+# identically-configured browsers with different extension orders read as
+# different bots. This patch:
+#   1. Allows specifying extension order via env var CAMOUFOX_TLS_EXT_ORDER
+#   2. Allows disabling GREASE via env var CAMOUFOX_TLS_GREASE=0
+#
+# Why env var, not MaskConfig.hpp: NSS is C code with an independent build;
+# linking against the C++ MaskConfig header from NSS is invasive. Env vars
+# are already used (CAMOU_CONFIG_* style) and getenv() is always available.
+# The Python pythonlib should populate CAMOUFOX_TLS_EXT_ORDER and
+# CAMOUFOX_TLS_GREASE from the MaskConfig keys before launching Firefox —
+# see pythonlib/camoufox/utils.py for the existing CAMOU_CONFIG_* pattern.
+#
+# MaskConfig keys this patch honours (via the envvar bridge):
+#   tls:extensions:order       array[str]  -> CAMOUFOX_TLS_EXT_ORDER (comma-sep)
+#   tls:grease:enabled         bool        -> CAMOUFOX_TLS_GREASE ("0" or "1")
+#   tls:extensions:shuffle     bool        -> CAMOUFOX_TLS_EXT_SHUFFLE ("0" or "1")
+#
+# NOTES FOR PATCH APPLICATION:
+# - Primary target: security/nss/lib/ssl/ssl3ext.c  (handshake extension table)
+# - Alternative targets depending on vendored NSS revision:
+#     security/nss/lib/ssl/ssl3exthandle.c
+#     security/nss/lib/ssl/tls13con.c
+# - The `ssl_ConstructExtensions` function assembles extensions at hello time.
+#   If the name differs, look for functions that iterate over sTlsExtensions
+#   or a similar static ordering table.
+# - GREASE is added in `tls13_MaybeGreaseEch` / `tls13_AddGrease` — gate
+#   those entry points with the env var check.
+# - After applying: `make build` (NSS is built as part of the Firefox tree,
+#   so no separate NSS rebuild is needed).
+
+diff --git a/security/nss/lib/ssl/ssl3ext.c b/security/nss/lib/ssl/ssl3ext.c
+--- a/security/nss/lib/ssl/ssl3ext.c
++++ b/security/nss/lib/ssl/ssl3ext.c
+@@ -14,6 +14,9 @@
+ #include "nss.h"
+ #include "pk11pub.h"
+ #include "secerr.h"
++#include <stdlib.h>
++#include <string.h>
++#include <ctype.h>
+ #include "ssl.h"
+ #include "sslimpl.h"
+ #include "sslproto.h"
+
+# --- Helper: parse CAMOUFOX_TLS_EXT_ORDER once and cache ------------------
+#
+# Returns a static array of extension ids in desired order, or NULL if no
+# override is set.
+
+@@ -40,0 +43,52 @@
++/* Camoufox: TLS extension order override from env.
++ * Parses a comma-separated list once and caches. Call
++ * camoufox_tls_ext_order_len() and camoufox_tls_ext_order_get(idx) from
++ * extension-writing code. */
++#define CAMOUFOX_MAX_EXT_ORDER 64
++static PRUint16 s_camoufox_ext_order[CAMOUFOX_MAX_EXT_ORDER];
++static int s_camoufox_ext_order_len = -1;  /* -1 = uninitialised, 0 = no override */
++
++static void camoufox_ext_order_init(void) {
++    if (s_camoufox_ext_order_len != -1) return;
++    s_camoufox_ext_order_len = 0;
++    const char* raw = getenv("CAMOUFOX_TLS_EXT_ORDER");
++    if (!raw || !*raw) return;
++    const char* p = raw;
++    while (*p && s_camoufox_ext_order_len < CAMOUFOX_MAX_EXT_ORDER) {
++        while (*p && (*p == ' ' || *p == ',')) p++;
++        if (!*p) break;
++        char* end = NULL;
++        long v = strtol(p, &end, 10);
++        if (end == p) break;
++        if (v >= 0 && v <= 0xFFFF) {
++            s_camoufox_ext_order[s_camoufox_ext_order_len++] = (PRUint16)v;
++        }
++        p = end;
++    }
++}
++
++int camoufox_tls_ext_order_len(void) {
++    camoufox_ext_order_init();
++    return s_camoufox_ext_order_len;
++}
++
++PRUint16 camoufox_tls_ext_order_get(int idx) {
++    return s_camoufox_ext_order[idx];
++}
++
++int camoufox_tls_grease_enabled(void) {
++    const char* v = getenv("CAMOUFOX_TLS_GREASE");
++    if (!v) return 1;  /* default: keep Firefox behaviour */
++    return (v[0] != '0');
++}
++
++int camoufox_tls_ext_shuffle(void) {
++    const char* v = getenv("CAMOUFOX_TLS_EXT_SHUFFLE");
++    return v && v[0] != '0';
++}
+
+# --- Rewrite ssl_ConstructExtensions to honour the override ----------------
+#
+# The function iterates over a static table of extension producers and
+# invokes each. We insert a reordering step: if CAMOUFOX_TLS_EXT_ORDER is
+# set, iterate in that order instead; if CAMOUFOX_TLS_EXT_SHUFFLE is set,
+# shuffle the original order with a per-process-deterministic seed.
+
+@@ -XXX,7 +XXX,40 @@ ssl_ConstructExtensions(sslSocket *ss, sslBuffer *buf, SSLHandshakeType message)
+ {
+     const ssl3ExtensionHandler *handler;
+     SECStatus rv;
++    int camoufoxLen = camoufox_tls_ext_order_len();
++    int camoufoxShuffle = camoufox_tls_ext_shuffle();
+
+     PORT_Assert(buf->len == 0);
+
+     /* Walk the handler table in the appropriate order. */
++    if (camoufoxLen > 0) {
++        /* Camoufox: use the configured extension order. Fall back to the
++         * default table for any extension ids not listed. */
++        for (int i = 0; i < camoufoxLen; i++) {
++            PRUint16 wantId = camoufox_tls_ext_order_get(i);
++            for (handler = ssl_GetExtensionHandlers(message);
++                 handler->ex_type != 0xFFFF; handler++) {
++                if (handler->ex_type != wantId) continue;
++                rv = ssl_ConstructOneExtension(ss, buf, handler, message);
++                if (rv != SECSuccess) return SECFailure;
++                break;
++            }
++        }
++        /* Also emit extensions that weren't in the custom list but are
++         * mandatory for the chosen protocol. The handler table is the
++         * source of truth. */
++        for (handler = ssl_GetExtensionHandlers(message);
++             handler->ex_type != 0xFFFF; handler++) {
++            PRBool already = PR_FALSE;
++            for (int j = 0; j < camoufoxLen; j++) {
++                if (camoufox_tls_ext_order_get(j) == handler->ex_type) {
++                    already = PR_TRUE; break;
++                }
++            }
++            if (already) continue;
++            rv = ssl_ConstructOneExtension(ss, buf, handler, message);
++            if (rv != SECSuccess) return SECFailure;
++        }
++        return SECSuccess;
++    }
++
+     for (handler = ssl_GetExtensionHandlers(message);
+          handler->ex_type != 0xFFFF; handler++) {
+         rv = ssl_ConstructOneExtension(ss, buf, handler, message);
+
+# NOTES:
+# - `ssl_ConstructOneExtension` is a helper that you may need to extract
+#   from the original loop body if it's inlined. If so, create a small
+#   static helper at the top of this patch section with the same body.
+# - `ssl_GetExtensionHandlers(message)` is presumed to exist; if your NSS
+#   revision uses a different accessor (e.g. iterates over
+#   `sExtensionHandlers[]` directly), replace accordingly.
+# - The fallback loop at the end emits any extensions not in the custom
+#   order. This is important — omitting mandatory extensions like
+#   `supported_versions` (id 43) breaks TLS 1.3.

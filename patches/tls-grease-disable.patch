@@ -1,0 +1,115 @@
+# TLS GREASE disable — P4.3
+#
+# Intent: GREASE (RFC 8701) injects a random fake cipher suite / extension
+# into the ClientHello to prove servers ignore unknown values. Firefox
+# enables GREASE by default in recent versions. GREASE has TWO fingerprinting
+# implications:
+#   1. Its PRESENCE indicates a post-2020 browser (so disabling it alone is
+#      a fingerprinting vector).
+#   2. GREASE values are per-connection random, which some WAFs use as a
+#      "liveness" signal (static GREASE across connections = automation).
+#
+# This patch exposes a switch (CAMOUFOX_TLS_GREASE env var, populated from
+# MaskConfig key `tls:grease:enabled`) so profiles can emulate browsers
+# that don't use GREASE (e.g. older Firefox, Safari, some mobile UAs).
+#
+# DEPENDS ON: tls-extensions-spoofing.patch (provides
+#             camoufox_tls_grease_enabled() declaration + definition).
+# APPLY ORDER: "tls-extensions-spoofing.patch" sorts BEFORE this file
+#              alphabetically, so the helper is always defined first.
+#
+# NOTES FOR PATCH APPLICATION:
+# - Target files depend on NSS revision. Common locations:
+#     security/nss/lib/ssl/tls13con.c       (TLS 1.3 GREASE injection)
+#     security/nss/lib/ssl/ssl3con.c        (ClientHello assembly)
+#     security/nss/lib/ssl/ssl3exthandle.c  (ECH-GREASE)
+# - Search for the symbol `ssl_AddGrease`, `tls13_MaybeGreaseEch`,
+#   `tls13_AddGreaseExtension`, or `SSL_ENABLE_GREASE` in your tree to
+#   locate the exact call site. Gate each with the helper.
+# - If GREASE is conditional on an NSS PR_SetOption already, consider
+#   exposing a Firefox pref `security.tls.enable_grease` instead; that's a
+#   simpler 3-line pref reader + JS pref and doesn't require NSS patching.
+#   See MaskConfig's browser-init.patch for the pref-reading pattern.
+
+# --- tls13con.c: gate the TLS 1.3 GREASE injection -------------------------
+
+diff --git a/security/nss/lib/ssl/tls13con.c b/security/nss/lib/ssl/tls13con.c
+--- a/security/nss/lib/ssl/tls13con.c
++++ b/security/nss/lib/ssl/tls13con.c
+@@ -13,6 +13,9 @@
+ #include "sslerr.h"
+ #include "sslproto.h"
+ #include "tls13con.h"
++
++/* Camoufox: declared in ssl3ext.c (tls-extensions-spoofing.patch). */
++extern int camoufox_tls_grease_enabled(void);
+ #include "tls13err.h"
+ #include "tls13exthandle.h"
+ #include "tls13hashstate.h"
+
+@@ -XXX,6 +XXX,10 @@ tls13_MaybeGreaseEch(sslSocket *ss, const sslBuffer *chInner, sslBuffer *chOuter)
+ {
+     SECStatus rv;
+     sslEchConfig *cfg;
++    /* Camoufox: skip ECH-GREASE when disabled. */
++    if (!camoufox_tls_grease_enabled()) {
++        return SECSuccess;
++    }
+
+     if (!PR_CLIST_IS_EMPTY(&ss->echConfigs) ||
+         !ss->opt.enableTls13GreaseEch ||
+
+# --- ssl3ext.c: gate the generic GREASE extension emission -----------------
+
+diff --git a/security/nss/lib/ssl/ssl3ext.c b/security/nss/lib/ssl/ssl3ext.c
+--- a/security/nss/lib/ssl/ssl3ext.c
++++ b/security/nss/lib/ssl/ssl3ext.c
+@@ -XXX,6 +XXX,10 @@ ssl_InsertPaddedGreaseExtension(sslSocket *ss, sslBuffer *buf, ssl3ExtensionHandler *hnd)
+ {
+     SECStatus rv;
+     unsigned int extStart;
++    /* Camoufox: skip GREASE extension when disabled. */
++    if (!camoufox_tls_grease_enabled()) {
++        return SECSuccess;
++    }
+
+     /* Reserve a 2-byte type + 2-byte length header. */
+     extStart = buf->len;
+
+# --- ssl3con.c: gate the ClientHello GREASE cipher-suite injection --------
+
+diff --git a/security/nss/lib/ssl/ssl3con.c b/security/nss/lib/ssl/ssl3con.c
+--- a/security/nss/lib/ssl/ssl3con.c
++++ b/security/nss/lib/ssl/ssl3con.c
+@@ -15,6 +15,9 @@
+ #include "pk11pub.h"
+ #include "secerr.h"
+ #include "secmod.h"
++
++/* Camoufox: declared in ssl3ext.c (tls-extensions-spoofing.patch). */
++extern int camoufox_tls_grease_enabled(void);
+ #include "ssl.h"
+ #include "sslimpl.h"
+ #include "sslproto.h"
+
+@@ -XXX,6 +XXX,11 @@ ssl3_AddCipherSuitesWithGrease(const sslSocket *ss, PRUint16 *cipher_suites,
+ {
+     unsigned int i;
+     PRUint16 grease;
++    /* Camoufox: emit only real cipher suites when GREASE is disabled. */
++    if (!camoufox_tls_grease_enabled()) {
++        ssl3_AddRealCipherSuites(ss, cipher_suites, count_out);
++        return;
++    }
+
+     /* Standard Firefox behaviour: first suite is a GREASE value. */
+     grease = ssl3_PickGreaseSuiteValue(ss, ...);
+
+# NOTES:
+# - `ssl3_AddRealCipherSuites` is the hypothetical name of the existing
+#   loop body that emits non-GREASE ciphers. If the implementation inlines
+#   the loop, extract it into a helper first, or inline the condition:
+#       if (camoufox_tls_grease_enabled()) { /* emit GREASE suite */ }
+# - Skipping GREASE unconditionally will make the ClientHello match older
+#   Firefox versions; pair with a matching `navigator.userAgent` so the UA
+#   and the TLS fingerprint line up.

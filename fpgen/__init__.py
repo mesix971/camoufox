@@ -15,16 +15,20 @@ from fpgen.adapter import to_camoufox_config
 from fpgen.archetypes import Archetype, ARCHETYPES, pick_archetype
 from fpgen.consistency import ConsistencyError, validate
 from fpgen.generator import generate
+from fpgen.presets import PRESETS, apply_preset, list_presets
 from fpgen.profile import Profile
 from fpgen.store import ProfileStore
 
 __all__ = [
-    "Archetype",
     "ARCHETYPES",
+    "Archetype",
     "ConsistencyError",
+    "PRESETS",
     "Profile",
     "ProfileStore",
+    "apply_preset",
     "generate",
+    "list_presets",
     "pick_archetype",
     "to_camoufox_config",
     "validate",

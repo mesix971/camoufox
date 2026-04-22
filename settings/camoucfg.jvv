@@ -308,5 +308,25 @@
 
     "websocket:remapping:enabled": "bool",
     "websocket:remapping:manualPortMappings": "array[str]",
-    "websocket:remapping:basePort": "int[>0]"
+    "websocket:remapping:basePort": "int[>0]",
+
+    "http2:settings:headerTableSize": "int[>=0]",
+    "http2:settings:enablePush": "bool",
+    "http2:settings:maxConcurrentStreams": "int[>=0]",
+    "http2:settings:initialWindowSize": "int[>=0]",
+    "http2:settings:maxFrameSize": "int[>=0]",
+    "http2:settings:maxHeaderListSize": "int[>=0]",
+    "http2:settings:customOrder": "array[str]",
+    "http2:window:initial": "int[>=0]",
+    "http2:priority:weight": "int[1 - 256]",
+
+    "tls:extensions:order": "array[str]",
+    "tls:extensions:shuffle": "bool",
+    "tls:grease:enabled": "bool",
+    "tls:cipherSuites:order": "array[str]",
+    "tls:alpn:order": "array[str]",
+
+    "creepjs:bypass:enabled": "bool",
+    "creepjs:bypass:fakeScore": "double[0 - 100]",
+    "creepjs:bypass:hostPatterns": "array[str]"
 }
