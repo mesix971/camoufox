@@ -1,0 +1,52 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-size: 14px;
+  }
+  body {
+    -webkit-font-smoothing: antialiased;
+  }
+  *::selection {
+    background-color: theme('colors.accent.600');
+    color: white;
+  }
+}
+
+@layer components {
+  .btn {
+    @apply inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium
+           transition-colors border border-transparent whitespace-nowrap;
+  }
+  .btn-primary {
+    @apply btn bg-accent-600 hover:bg-accent-500 text-white;
+  }
+  .btn-ghost {
+    @apply btn bg-surface-800 hover:bg-surface-700 text-surface-100 border-surface-700;
+  }
+  .btn-danger {
+    @apply btn bg-red-700 hover:bg-red-600 text-white;
+  }
+  .input {
+    @apply w-full px-2.5 py-1.5 bg-surface-900 border border-surface-700 rounded-md
+           text-surface-100 placeholder-surface-200/40 text-sm
+           focus:outline-none focus:border-accent-500 focus:ring-1 focus:ring-accent-500;
+  }
+  .table-row {
+    @apply border-b border-surface-700/60 hover:bg-surface-800/70 transition-colors;
+  }
+  .badge {
+    @apply inline-block px-1.5 py-0.5 rounded text-xs font-medium;
+  }
+  .badge-active { @apply bg-green-900/60 text-green-300; }
+  .badge-flagged { @apply bg-amber-900/60 text-amber-300; }
+  .badge-dead { @apply bg-red-900/60 text-red-300; }
+  .badge-untested { @apply bg-surface-700 text-surface-100/70; }
+  .badge-starting { @apply bg-blue-900/60 text-blue-300; }
+  .badge-running { @apply bg-green-900/60 text-green-300; }
+  .badge-stopped { @apply bg-surface-700 text-surface-100/60; }
+  .badge-crashed { @apply bg-red-900/60 text-red-300; }
+}
