@@ -3,6 +3,11 @@
   "version": "0.1.0",
   "description": "Electron launcher for Camoufox — wraps fpgen, proxypool, and session management behind a UI.",
   "private": true,
+  "homepage": "https://github.com/mesix971/camoufox",
+  "author": {
+    "name": "Camoufox",
+    "email": "noreply@camoufox.local"
+  },
   "main": "dist/main/main/index.js",
   "scripts": {
     "build:main": "tsc -p tsconfig.main.json",
@@ -71,6 +76,7 @@
     ],
     "linux": {
       "category": "Network",
+      "maintainer": "Camoufox <noreply@camoufox.local>",
       "target": [
         "AppImage",
         "deb"
