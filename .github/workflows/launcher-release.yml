@@ -1,0 +1,146 @@
+name: Launcher release
+
+# Builds the Electron launcher for Linux / Windows / macOS and publishes
+# installers as a GitHub Release. Triggered by tags of the form
+# `launcher-v*` so it doesn't clash with Camoufox core releases.
+#
+# Create a release:
+#   git tag launcher-v0.1.0
+#   git push origin launcher-v0.1.0
+#
+# Or manually via the Actions tab (workflow_dispatch) — this produces a
+# draft release you can review before publishing.
+
+on:
+  push:
+    tags:
+      - "launcher-v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag name to publish (e.g. launcher-v0.1.0-rc1). Draft release is created."
+        required: true
+        default: "launcher-v0.1.0-dev"
+
+permissions:
+  contents: write  # needed to create a release
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            platform: linux
+            artifact_glob: "launcher/release/*.AppImage,launcher/release/*.deb"
+          - os: windows-2022
+            platform: win
+            artifact_glob: "launcher/release/*.exe"
+          - os: macos-13
+            platform: mac
+            artifact_glob: "launcher/release/*.dmg,launcher/release/*.zip"
+
+    runs-on: ${{ matrix.os }}
+    name: build-${{ matrix.platform }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: launcher/package-lock.json
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install launcher dependencies
+        working-directory: launcher
+        run: npm ci
+
+      - name: Build launcher (TypeScript + CSS + renderer bundle)
+        working-directory: launcher
+        run: npm run build
+
+      - name: Typecheck
+        working-directory: launcher
+        run: npm run typecheck
+
+      - name: Package (${{ matrix.platform }})
+        working-directory: launcher
+        env:
+          # electron-builder needs this to skip post-install rebuild when
+          # no native deps are present — we have none.
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+          # Token only needed if we wanted auto-upload; we upload via action
+          # below instead, so leave empty.
+          GH_TOKEN: ""
+        run: npx electron-builder --${{ matrix.platform }} --publish=never
+
+      - name: List built artifacts
+        shell: bash
+        working-directory: launcher
+        run: ls -la release/ || true
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: launcher-${{ matrix.platform }}
+          path: |
+            launcher/release/*.AppImage
+            launcher/release/*.deb
+            launcher/release/*.exe
+            launcher/release/*.dmg
+            launcher/release/*.zip
+          if-no-files-found: error
+
+  release:
+    needs: build
+    runs-on: ubuntu-22.04
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all launcher artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: launcher-*
+          merge-multiple: true
+          path: launcher-artifacts
+
+      - name: List downloaded
+        run: ls -la launcher-artifacts/
+
+      - name: Determine tag
+        id: tag
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "name=${{ github.event.inputs.tag }}" >> "$GITHUB_OUTPUT"
+            echo "draft=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "name=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+            echo "draft=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.name }}
+          name: Camoufox Launcher ${{ steps.tag.outputs.name }}
+          draft: ${{ steps.tag.outputs.draft }}
+          generate_release_notes: true
+          files: launcher-artifacts/*
+          body: |
+            Downloadable builds of the Camoufox Launcher for Linux, Windows and macOS.
+
+            ## Downloads
+            - **Linux**: `*.AppImage` (portable) or `*.deb` (Debian/Ubuntu)
+            - **Windows**: `*.exe` (installer or portable)
+            - **macOS**: `*.dmg` (installer) or `*.zip` (archive)
+
+            See `P4_PATCHES.md` and `launcher/` in the source for usage.
