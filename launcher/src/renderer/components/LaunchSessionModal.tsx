@@ -58,6 +58,8 @@ export function LaunchSessionModal({ open, onClose, initialProfileId }: Props) {
       if (advanced.queue_monitor) args.queue_monitor = true;
       if (advanced.auto_refresh) args.auto_refresh = advanced.auto_refresh;
       if (advanced.rate_limit) args.rate_limit = advanced.rate_limit;
+      if (advanced.humanlike) args.humanlike = true;
+      if (advanced.run_macro) args.run_macro = advanced.run_macro;
       await api().launchSession(args);
       await refreshSessions();
       showToast("success", "Session démarrée");

@@ -2,12 +2,13 @@
 
 import { create } from "zustand";
 import type {
-  Archetype, ProfileSummary, ProxySummary, Session, Task,
+  Archetype, CreepJSScore, Macro, ProfileSummary, ProxySummary,
+  SessionWithMetrics, Task,
 } from "../../shared/types";
 import { api } from "../api";
 
 export interface AppState {
-  tab: "dashboard" | "profiles" | "proxies" | "sessions" | "tasks" | "settings";
+  tab: "dashboard" | "profiles" | "proxies" | "sessions" | "tasks" | "macros" | "settings";
   setTab: (t: AppState["tab"]) => void;
 
   profiles: ProfileSummary[];
@@ -20,10 +21,11 @@ export interface AppState {
   proxiesError: string | null;
   refreshProxies: () => Promise<void>;
 
-  sessions: Session[];
+  sessions: SessionWithMetrics[];
   sessionsLoading: boolean;
   sessionsError: string | null;
-  refreshSessions: () => Promise<void>;
+  psutilAvailable: boolean;
+  refreshSessions: (opts?: { metrics?: boolean }) => Promise<void>;
 
   tasks: Task[];
   tasksStats: Record<string, number>;
@@ -33,6 +35,15 @@ export interface AppState {
 
   archetypes: Archetype[];
   loadArchetypes: () => Promise<void>;
+
+  macros: Macro[];
+  macrosLoading: boolean;
+  macrosError: string | null;
+  refreshMacros: () => Promise<void>;
+
+  // Latest CreepJS score per profile_id (kept in memory only).
+  creepjsScores: Record<string, CreepJSScore>;
+  setCreepjsScore: (profileId: string, score: CreepJSScore) => void;
 
   // Global toast
   toast: { kind: "info" | "error" | "success"; text: string } | null;
@@ -73,11 +84,19 @@ export const useAppStore = create<AppState>((set, get) => ({
   sessions: [],
   sessionsLoading: false,
   sessionsError: null,
-  refreshSessions: async () => {
+  psutilAvailable: true,
+  refreshSessions: async (opts) => {
     set({ sessionsLoading: true, sessionsError: null });
     try {
-      const res = await api().listSessions() as { sessions: Session[] };
-      set({ sessions: res.sessions, sessionsLoading: false });
+      const res = await api().listSessions(opts ?? {}) as {
+        sessions: SessionWithMetrics[];
+        psutil_available?: boolean;
+      };
+      set({
+        sessions: res.sessions,
+        sessionsLoading: false,
+        psutilAvailable: res.psutil_available ?? true,
+      });
     } catch (e) {
       set({ sessionsError: (e as Error).message, sessionsLoading: false });
     }
@@ -113,6 +132,25 @@ export const useAppStore = create<AppState>((set, get) => ({
       set({ toast: { kind: "error", text: (e as Error).message } });
     }
   },
+
+  macros: [],
+  macrosLoading: false,
+  macrosError: null,
+  refreshMacros: async () => {
+    set({ macrosLoading: true, macrosError: null });
+    try {
+      const res = await api().listMacros() as { macros: Macro[] };
+      set({ macros: res.macros ?? [], macrosLoading: false });
+    } catch (e) {
+      set({ macrosError: (e as Error).message, macrosLoading: false });
+    }
+  },
+
+  creepjsScores: {},
+  setCreepjsScore: (profileId, score) =>
+    set((s) => ({
+      creepjsScores: { ...s.creepjsScores, [profileId]: score },
+    })),
 
   toast: null,
   showToast: (kind, text) => {

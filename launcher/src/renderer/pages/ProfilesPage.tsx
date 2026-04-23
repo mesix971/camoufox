@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { ProfileSummary } from "../../shared/types";
+import type { CreepJSScore, ProfileSummary } from "../../shared/types";
 import { api } from "../api";
 import { BindProxyModal } from "../components/BindProxyModal";
 import { ImportProfileModal } from "../components/ImportProfileModal";
@@ -13,12 +13,14 @@ export function ProfilesPage() {
   const {
     profiles, profilesLoading, profilesError, refreshProfiles,
     proxies, refreshProxies, showToast,
+    creepjsScores, setCreepjsScore,
   } = useAppStore();
   const [showNew, setShowNew] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [launchFor, setLaunchFor] = useState<string | null>(null);
   const [bindFor, setBindFor] = useState<ProfileSummary | null>(null);
   const [editFor, setEditFor] = useState<ProfileSummary | null>(null);
+  const [scoringIds, setScoringIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     refreshProfiles();
@@ -51,6 +53,36 @@ export function ProfilesPage() {
       showToast("success", "Profil cloné");
     } catch (e) {
       showToast("error", (e as Error).message);
+    }
+  };
+
+  const scoreCreepjs = async (p: ProfileSummary) => {
+    setScoringIds((prev) => {
+      const next = new Set(prev);
+      next.add(p.id);
+      return next;
+    });
+    showToast("info", `CreepJS en cours pour « ${p.name} »...`);
+    try {
+      const res = await api().scoreProfileCreepjs({
+        profile_id: p.id,
+        headless: true,
+        save_to_profile: true,
+      }) as { score: CreepJSScore };
+      setCreepjsScore(p.id, res.score);
+      const verdict = res.score.passed ? "réussi" : "échoué";
+      showToast(
+        res.score.passed ? "success" : "error",
+        `CreepJS ${verdict} : FP ${Math.round(res.score.fingerprint_score)} / Trust ${Math.round(res.score.trust_score)}`,
+      );
+    } catch (e) {
+      showToast("error", (e as Error).message);
+    } finally {
+      setScoringIds((prev) => {
+        const next = new Set(prev);
+        next.delete(p.id);
+        return next;
+      });
     }
   };
 
@@ -126,7 +158,12 @@ export function ProfilesPage() {
           <tbody>
             {profiles.map((p) => (
               <tr key={p.id} className="table-row">
-                <td className="px-4 py-2 font-medium">{p.name}</td>
+                <td className="px-4 py-2 font-medium">
+                  <div className="flex items-center gap-2">
+                    <span>{p.name}</span>
+                    <CreepJSBadge score={creepjsScores[p.id]} />
+                  </div>
+                </td>
                 <td className="px-4 py-2 font-mono text-xs text-surface-100/70">{p.archetype_id}</td>
                 <td className="px-4 py-2">{p.os}</td>
                 <td className="px-4 py-2">{p.locale}</td>
@@ -158,6 +195,14 @@ export function ProfilesPage() {
                       onClick={() => exportOne(p)}
                     >
                       Exporter
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-ghost !py-1 !text-xs"
+                      onClick={() => scoreCreepjs(p)}
+                      disabled={scoringIds.has(p.id)}
+                    >
+                      {scoringIds.has(p.id) ? "Test..." : "Tester CreepJS"}
                     </button>
                     <button
                       type="button"
@@ -206,5 +251,23 @@ export function ProfilesPage() {
         profile={editFor}
       />
     </div>
+  );
+}
+
+function CreepJSBadge({ score }: { score: CreepJSScore | undefined }) {
+  if (!score) return null;
+  const fp = Math.round(score.fingerprint_score);
+  const trust = Math.round(score.trust_score);
+  const cls = score.passed
+    ? "bg-green-900/60 text-green-300"
+    : "bg-red-900/60 text-red-300";
+  const icon = score.passed ? "✓" : "✗";
+  return (
+    <span
+      className={`badge ${cls}`}
+      title={`FP ${fp} / Trust ${trust} — mensonges ${score.lies_count}, signaux bots ${score.bot_signals}`}
+    >
+      {icon} {fp}/{trust}
+    </span>
   );
 }

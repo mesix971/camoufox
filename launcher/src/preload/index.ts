@@ -44,11 +44,13 @@ const api = {
   }) => invoke(IPC.rotateProxySession, args),
 
   // sessions
-  listSessions: () => invoke(IPC.listSessions),
+  listSessions: (args?: { metrics?: boolean }) =>
+    invoke(IPC.listSessions, args ?? {}),
   launchSession: (args: {
     profile_id: string; proxy_id?: string; url?: string; headless?: boolean;
     warmup?: boolean; auto_refresh?: number; persistent?: boolean;
     queue_monitor?: boolean; rate_limit?: number;
+    humanlike?: boolean; run_macro?: string; record_macro?: string;
   }) => invoke(IPC.launchSession, args),
   killSession: (id: string) => invoke(IPC.killSession, { id }),
   sessionLog: (id: string, lines = 200) => invoke(IPC.sessionLog, { id, lines }),
@@ -65,7 +67,10 @@ const api = {
     persistent?: boolean;
     queue_monitor?: boolean;
     rate_limit?: number;
+    humanlike?: boolean;
+    run_macro?: string;
   }) => invoke(IPC.batchLaunchSession, args),
+  sessionMetrics: () => invoke(IPC.sessionMetrics, {}),
 
   // binding + dashboard
   bindProfileProxy: (args: { profile_id: string; proxy_id: string | null }) =>
@@ -103,6 +108,25 @@ const api = {
   listTasks: (args?: { status?: string; tag?: string }) =>
     invoke(IPC.listTasks, args ?? {}),
   deleteTask: (args: { id: string }) => invoke(IPC.deleteTask, args),
+
+  // CreepJS scoring
+  scoreProfileCreepjs: (args: {
+    profile_id: string;
+    pass_fp_threshold?: number;
+    pass_trust_threshold?: number;
+    headless?: boolean;
+    save_to_profile?: boolean;
+  }) => invoke(IPC.scoreProfileCreepjs, args),
+
+  // macros
+  listMacros: () => invoke(IPC.listMacros, {}),
+  showMacro: (args: { name: string }) => invoke(IPC.showMacro, args),
+  saveMacro: (args: {
+    name: string;
+    actions: unknown[];
+    metadata?: Record<string, unknown>;
+  }) => invoke(IPC.saveMacro, args),
+  deleteMacro: (args: { name: string }) => invoke(IPC.deleteMacro, args),
 };
 
 contextBridge.exposeInMainWorld("api", api);

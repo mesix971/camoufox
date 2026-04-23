@@ -1,4 +1,5 @@
 import { DashboardPage } from "./pages/DashboardPage";
+import { MacrosPage } from "./pages/MacrosPage";
 import { ProfilesPage } from "./pages/ProfilesPage";
 import { ProxiesPage } from "./pages/ProxiesPage";
 import { SessionsPage } from "./pages/SessionsPage";
@@ -12,6 +13,7 @@ const TABS = [
   { id: "proxies" as const, label: "Proxies" },
   { id: "sessions" as const, label: "Sessions" },
   { id: "tasks" as const, label: "Tâches" },
+  { id: "macros" as const, label: "Macros" },
   { id: "settings" as const, label: "Paramètres" },
 ];
 
@@ -47,6 +49,7 @@ export function App() {
         {tab === "proxies" && <ProxiesPage />}
         {tab === "sessions" && <SessionsPage />}
         {tab === "tasks" && <TasksPage />}
+        {tab === "macros" && <MacrosPage />}
         {tab === "settings" && <SettingsPage />}
       </main>
 

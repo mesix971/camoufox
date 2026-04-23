@@ -1,7 +1,9 @@
 // Collapsible "Options avancées" block shared by LaunchSessionModal and
 // BatchLaunchModal.
 
+import { useEffect } from "react";
 import type { LaunchOptions } from "../../shared/types";
+import { useAppStore } from "../store";
 
 interface Props {
   value: LaunchOptions;
@@ -9,6 +11,13 @@ interface Props {
 }
 
 export function AdvancedLaunchOptions({ value, onChange }: Props) {
+  const macros = useAppStore((s) => s.macros);
+  const refreshMacros = useAppStore((s) => s.refreshMacros);
+
+  useEffect(() => {
+    refreshMacros();
+  }, [refreshMacros]);
+
   const set = <K extends keyof LaunchOptions>(k: K, v: LaunchOptions[K]) =>
     onChange({ ...value, [k]: v });
 
@@ -42,6 +51,14 @@ export function AdvancedLaunchOptions({ value, onChange }: Props) {
           />
           Queue monitor (détecte les salles d'attente)
         </label>
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={!!value.humanlike}
+            onChange={(e) => set("humanlike", e.target.checked)}
+          />
+          Humanlike (souris + frappe réaliste)
+        </label>
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="block text-xs text-surface-100/60 mb-1">
@@ -73,6 +90,21 @@ export function AdvancedLaunchOptions({ value, onChange }: Props) {
               0 = illimité
             </div>
           </div>
+        </div>
+        <div>
+          <label className="block text-xs text-surface-100/60 mb-1">
+            Macro à exécuter (optionnel)
+          </label>
+          <select
+            className="input"
+            value={value.run_macro ?? ""}
+            onChange={(e) => set("run_macro", e.target.value || undefined)}
+          >
+            <option value="">(aucune)</option>
+            {macros.map((m) => (
+              <option key={m.name} value={m.name}>{m.name}</option>
+            ))}
+          </select>
         </div>
       </div>
     </details>

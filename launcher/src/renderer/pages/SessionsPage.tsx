@@ -10,6 +10,7 @@ export function SessionsPage() {
   const {
     sessions, sessionsLoading, sessionsError, refreshSessions,
     profiles, refreshProfiles, refreshProxies, showToast,
+    psutilAvailable,
   } = useAppStore();
 
   const profileMap = useMemo(
@@ -29,8 +30,9 @@ export function SessionsPage() {
 
   // Poll sessions every 2s so status transitions show up without a manual refresh.
   useEffect(() => {
-    refreshSessions();
-    const id = setInterval(refreshSessions, 2000);
+    const tick = () => refreshSessions({ metrics: true });
+    tick();
+    const id = setInterval(tick, 2000);
     return () => clearInterval(id);
   }, [refreshSessions]);
 
@@ -101,6 +103,12 @@ export function SessionsPage() {
         </div>
       )}
 
+      {!psutilAvailable && (
+        <div className="px-4 py-2 bg-amber-900/40 text-amber-200 text-xs border-b border-amber-800">
+          Installez psutil pour les métriques live : <code className="font-mono">pip install psutil</code>
+        </div>
+      )}
+
       <div className="flex-1 overflow-y-auto">
         {sessions.length === 0 && !sessionsLoading && (
           <div className="p-8 text-center text-surface-100/50">
@@ -113,6 +121,8 @@ export function SessionsPage() {
               <th className="text-left px-4 py-2 font-medium">Statut</th>
               <th className="text-left px-4 py-2 font-medium">ID</th>
               <th className="text-left px-4 py-2 font-medium">PID</th>
+              <th className="text-right px-4 py-2 font-medium">CPU %</th>
+              <th className="text-right px-4 py-2 font-medium">RAM</th>
               <th className="text-left px-4 py-2 font-medium">Profil</th>
               <th className="text-left px-4 py-2 font-medium">Proxy</th>
               <th className="text-left px-4 py-2 font-medium">URL</th>
@@ -126,6 +136,12 @@ export function SessionsPage() {
                 <td className="px-4 py-2"><StatusBadge status={s.status} /></td>
                 <td className="px-4 py-2 font-mono text-xs">{s.id}</td>
                 <td className="px-4 py-2 font-mono text-xs">{s.pid}</td>
+                <td className="px-4 py-2 text-right font-mono text-xs">
+                  {formatCpu(s.metrics?.cpu_percent)}
+                </td>
+                <td className="px-4 py-2 text-right font-mono text-xs">
+                  {formatBytes(s.metrics?.rss_bytes)}
+                </td>
                 <td className="px-4 py-2 text-xs" title={s.profile_id}>
                   {profileMap.get(s.profile_id)?.name ?? s.profile_id.slice(0, 8)}
                 </td>
@@ -167,4 +183,22 @@ export function SessionsPage() {
       </Modal>
     </div>
   );
+}
+
+function formatCpu(v: number | undefined): string {
+  if (v === undefined || v === null || Number.isNaN(v)) return "—";
+  return `${v.toFixed(1)}`;
+}
+
+export function formatBytes(bytes: number | undefined): string {
+  if (bytes === undefined || bytes === null || Number.isNaN(bytes)) return "—";
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  let v = bytes;
+  let i = 0;
+  while (v >= 1024 && i < units.length - 1) {
+    v /= 1024;
+    i++;
+  }
+  const formatted = v >= 100 || i === 0 ? v.toFixed(0) : v.toFixed(1);
+  return `${formatted} ${units[i]}`;
 }

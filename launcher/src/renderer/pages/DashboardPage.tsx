@@ -1,12 +1,14 @@
 import { useEffect, useState } from "react";
-import type { DashboardSummary } from "../../shared/types";
+import type { DashboardSummary, SessionMetricsReport } from "../../shared/types";
 import { api } from "../api";
 import { StatusBadge } from "../components/Badge";
+import { formatBytes } from "./SessionsPage";
 import { useAppStore } from "../store";
 
 export function DashboardPage() {
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [metrics, setMetrics] = useState<SessionMetricsReport | null>(null);
   const setTab = useAppStore((s) => s.setTab);
 
   useEffect(() => {
@@ -21,6 +23,21 @@ export function DashboardPage() {
     };
     load();
     const id = setInterval(load, 3000);
+    return () => { cancelled = true; clearInterval(id); };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const m = await api().sessionMetrics() as SessionMetricsReport;
+        if (!cancelled) setMetrics(m);
+      } catch {
+        // Non-blocking: system panel just shows a placeholder.
+      }
+    };
+    load();
+    const id = setInterval(load, 5000);
     return () => { cancelled = true; clearInterval(id); };
   }, []);
 
@@ -104,7 +121,56 @@ export function DashboardPage() {
             </button>
           </div>
         </Panel>
+        <Panel title="Système">
+          <SystemPanel metrics={metrics} />
+        </Panel>
       </div>
+    </div>
+  );
+}
+
+function SystemPanel({ metrics }: { metrics: SessionMetricsReport | null }) {
+  if (!metrics) {
+    return <div className="text-surface-100/40 text-sm">chargement...</div>;
+  }
+  if (!metrics.psutil_available) {
+    return (
+      <div className="text-xs text-amber-300/90">
+        Installez psutil pour les métriques live :{" "}
+        <code className="font-mono">pip install psutil</code>
+      </div>
+    );
+  }
+  const sys = metrics.system || {};
+  const memUsed = typeof sys.memory_used_bytes === "number" ? sys.memory_used_bytes : undefined;
+  const memTotal = typeof sys.memory_total_bytes === "number" ? sys.memory_total_bytes : undefined;
+  const running = metrics.sessions.filter(
+    (s) => s.status === "running" || s.status === "starting",
+  ).length;
+  return (
+    <div className="space-y-2 text-sm">
+      <Row label="CPU total">
+        <span className="font-mono">{(sys.cpu_percent ?? 0).toFixed(1)} %</span>
+      </Row>
+      <Row label="Mémoire">
+        <span className="font-mono">
+          {memUsed !== undefined && memTotal !== undefined
+            ? `${formatBytes(memUsed)} / ${formatBytes(memTotal)}`
+            : `${(sys.memory_percent ?? 0).toFixed(1)} %`}
+        </span>
+      </Row>
+      <Row label="Sessions actives">
+        <span className="font-mono">{running}</span>
+      </Row>
+    </div>
+  );
+}
+
+function Row({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex items-center justify-between">
+      <span className="text-surface-100/60 text-xs">{label}</span>
+      {children}
     </div>
   );
 }
