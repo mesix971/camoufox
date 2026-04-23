@@ -1,0 +1,145 @@
+# Canvas/WebGL pixel-noise patch — DRAFT
+#
+# Adds per-render micro-noise to 2D canvas readback and WebGL readPixels/
+# toDataURL so fingerprinting sites that hash the pixel buffer cannot get
+# a stable hash even within a session. Without this, a site that hashes
+# getImageData() once and again later will see the same hash and build
+# a fingerprint entry.
+#
+# Status: UNVERIFIED — written without Firefox source access. Line
+# numbers are approximate (patch -p1 --fuzz=5 will find them). Review
+# and regenerate with `git diff > canvas-webgl-pixel-noise.patch` after
+# applying to the inner repo.
+#
+# MaskConfig keys read:
+#   canvas:pixel_noise:enabled        bool     default false
+#   canvas:pixel_noise:amplitude      uint8    1..10 (default 2)
+#   canvas:pixel_noise:frequency      float    0.0..1.0 (default 0.05)
+#                                              probability per pixel
+#   webgl:readback_noise:enabled      bool     default false
+#   webgl:readback_noise:amplitude    uint8    1..10 (default 2)
+#
+# The noise seed is deterministic per (profile_id, frame_hash) so that
+# same-profile same-frame gives same readback — stability across
+# re-renders, but unique across profiles. The seed comes from MaskConfig.
+#
+# Apply:
+#   cd camoufox-142.0.1-fork.27
+#   patch -p1 -i ../patches/canvas-webgl-pixel-noise.patch --fuzz=5
+#   # fix any .rej manually, then
+#   git diff > ../patches/canvas-webgl-pixel-noise.patch
+
+diff --git a/dom/canvas/CanvasRenderingContext2D.cpp b/dom/canvas/CanvasRenderingContext2D.cpp
+index 0000000..0000000 100644
+--- a/dom/canvas/CanvasRenderingContext2D.cpp
++++ b/dom/canvas/CanvasRenderingContext2D.cpp
+@@ -10,6 +10,7 @@
+ #include "CanvasUtils.h"
+ #include "mozilla/gfx/Logging.h"
+ #include "mozilla/CheckedInt.h"
++#include "MaskConfig.hpp"  // Camoufox
+
+ // ... existing includes ...
+
+@@ -3000,6 +3001,39 @@ CanvasRenderingContext2D::GetImageData(JSContext* aCx, double aSx, double aSy,
+     return nullptr;
+   }
+
++  // CAMOUFOX: apply per-pixel noise if configured. Keeps hash unstable
++  // across profiles while being reproducible within the same (profile,
++  // frame) tuple — we seed from the canvas content hash + profile key.
++  if (MaskConfig::GetBool("canvas:pixel_noise:enabled").value_or(false)) {
++    uint8_t amp = static_cast<uint8_t>(
++        MaskConfig::GetInt32("canvas:pixel_noise:amplitude").value_or(2));
++    double freq = MaskConfig::GetDouble("canvas:pixel_noise:frequency").value_or(0.05);
++    if (amp > 10) amp = 10;
++    if (freq < 0.0) freq = 0.0;
++    if (freq > 1.0) freq = 1.0;
++
++    // Seed: xor of first 64 bytes of the buffer + profile seed. Stable
++    // per-frame so double-read gives same answer (WAFs compare hashes
++    // across duplicate reads to detect randomisation).
++    uint64_t seed = 0x9E3779B97F4A7C15ULL ^
++        MaskConfig::GetInt32("canvas:pixel_noise:seed").value_or(0);
++    uint8_t* pixels = result->Data();
++    size_t len = result->Length();
++    for (size_t i = 0; i < std::min<size_t>(len, 64); i += 4) {
++      seed ^= (uint64_t)pixels[i] << ((i % 8) * 8);
++    }
++
++    auto next = [&seed]() -> uint64_t {
++      seed = seed * 6364136223846793005ULL + 1442695040888963407ULL;
++      return seed;
++    };
++    for (size_t i = 0; i + 3 < len; i += 4) {
++      if ((next() & 0xFFFF) < (uint64_t)(freq * 65535.0)) {
++        int8_t delta = static_cast<int8_t>((next() & ((amp << 1) - 1)) - amp);
++        pixels[i]     = std::clamp(int(pixels[i])     + delta, 0, 255);
++        pixels[i + 1] = std::clamp(int(pixels[i + 1]) + delta, 0, 255);
++        pixels[i + 2] = std::clamp(int(pixels[i + 2]) + delta, 0, 255);
++        // alpha untouched (i+3) — altering it shifts composition mode.
++      }
++    }
++  }
++
+   return result.forget();
+ }
+
+@@ -3100,6 +3134,13 @@ CanvasRenderingContext2D::ToDataURL(JSContext* aCx, const nsAString& aType,
+     return nullptr;
+   }
+
++  // CAMOUFOX: if pixel noise is enabled, the raw bitmap we're about to
++  // encode must be noised too. Re-use the readback path by reading back,
++  // noising, and re-drawing onto a fresh surface before encoding.
++  // Note: heavy but matches what GetImageData does, so toDataURL and
++  // getImageData hashes stay consistent with each other.
++  // (Implementation: mkdir your surface, noise via the same lambda as
++  //  GetImageData, then fall through to the existing encoder.)
++
+   // ... existing encoding path ...
+ }
+
+diff --git a/dom/webgl/WebGLContext.cpp b/dom/webgl/WebGLContext.cpp
+index 0000000..0000000 100644
+--- a/dom/webgl/WebGLContext.cpp
++++ b/dom/webgl/WebGLContext.cpp
+@@ -5,6 +5,7 @@
+ #include "WebGLContext.h"
+ #include "GLContext.h"
+ #include "mozilla/dom/WebGLRenderingContextBinding.h"
++#include "MaskConfig.hpp"  // Camoufox
+
+ // ... existing includes ...
+
+@@ -4500,6 +4501,30 @@ WebGLContext::ReadPixels(GLint aX, GLint aY, GLsizei aWidth, GLsizei aHeight,
+   }
+   // readPixels executed here, aPixels is now populated.
+
++  // CAMOUFOX: per-pixel noise on raw GPU readback. Targets Turnstile/
++  // DataDome tests that hash the GPU output to detect virtual GPUs.
++  if (MaskConfig::GetBool("webgl:readback_noise:enabled").value_or(false)) {
++    uint8_t amp = static_cast<uint8_t>(
++        MaskConfig::GetInt32("webgl:readback_noise:amplitude").value_or(2));
++    if (amp > 10) amp = 10;
++    uint64_t seed = 0xA5A5A5A5A5A5A5A5ULL ^
++        MaskConfig::GetInt32("webgl:readback_noise:seed").value_or(0);
++    auto next = [&seed]() -> uint64_t {
++      seed = seed * 6364136223846793005ULL + 1442695040888963407ULL;
++      return seed;
++    };
++    uint8_t* pixels = static_cast<uint8_t*>(aPixels.DataAllowShared());
++    size_t bytes = aPixels.LengthAllowShared();
++    for (size_t i = 0; i + 3 < bytes; i += 4) {
++      // Only noise rgb; keep alpha exact so transparency tests pass.
++      int8_t dr = static_cast<int8_t>((next() & ((amp << 1) - 1)) - amp);
++      int8_t dg = static_cast<int8_t>((next() & ((amp << 1) - 1)) - amp);
++      int8_t db = static_cast<int8_t>((next() & ((amp << 1) - 1)) - amp);
++      pixels[i]     = std::clamp(int(pixels[i])     + dr, 0, 255);
++      pixels[i + 1] = std::clamp(int(pixels[i + 1]) + dg, 0, 255);
++      pixels[i + 2] = std::clamp(int(pixels[i + 2]) + db, 0, 255);
++    }
++  }
++
+   // existing cleanup...
+ }

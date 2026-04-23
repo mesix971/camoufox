@@ -18,6 +18,7 @@ import json
 import fpgen
 import proxypool
 
+from launcher.bridge import metrics as metrics_mod
 from launcher.bridge import webhook as webhook_mod
 from launcher.bridge.ratelimit import RateLimiter
 from launcher.bridge.sessions import SessionManager
@@ -295,7 +296,34 @@ def rotate_proxy_session(args: Dict[str, Any]) -> Dict[str, Any]:
 
 def list_sessions(args: Dict[str, Any]) -> Dict[str, Any]:
     mgr = _session_mgr()
-    return {"sessions": [mgr.as_dict(s) for s in mgr.list()]}
+    include_metrics = bool(args.get("metrics", False))
+    items = []
+    for s in mgr.list():
+        d = mgr.as_dict(s)
+        if include_metrics and s.pid > 0:
+            d["metrics"] = metrics_mod.process_metrics(s.pid)
+        items.append(d)
+    out = {"sessions": items}
+    if include_metrics:
+        out["system"] = metrics_mod.system_metrics()
+        out["psutil_available"] = metrics_mod.has_psutil()
+    return out
+
+
+def session_metrics(args: Dict[str, Any]) -> Dict[str, Any]:
+    """Live CPU/RAM per session (requires psutil)."""
+    mgr = _session_mgr()
+    sessions = mgr.list()
+    pids = [s.pid for s in sessions if s.pid > 0]
+    by_pid = metrics_mod.metrics_for_sessions(pids)
+    return {
+        "psutil_available": metrics_mod.has_psutil(),
+        "system": metrics_mod.system_metrics(),
+        "sessions": [
+            {"id": s.id, "pid": s.pid, "status": s.status, **by_pid.get(s.pid, {})}
+            for s in sessions
+        ],
+    }
 
 
 def launch_session(args: Dict[str, Any]) -> Dict[str, Any]:
@@ -587,6 +615,7 @@ COMMANDS = {
     "rotate-proxy-session": rotate_proxy_session,
 
     "list-sessions": list_sessions,
+    "session-metrics": session_metrics,
     "launch-session": launch_session,
     "kill-session": kill_session,
     "kill-all-sessions": kill_all_sessions,
