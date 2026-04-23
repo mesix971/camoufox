@@ -342,6 +342,10 @@ def launch_session(args: Dict[str, Any]) -> Dict[str, Any]:
         persistent=bool(args.get("persistent", False)),
         queue_monitor=bool(args.get("queue_monitor", False)),
         rate_limit=int(args.get("rate_limit", 0) or 0),
+        auto_solve_captcha=bool(args.get("auto_solve_captcha", False)),
+        humanlike=bool(args.get("humanlike", False)),
+        run_macro=args.get("run_macro"),
+        record_macro=args.get("record_macro"),
     )
     return {"session": mgr.as_dict(s)}
 
@@ -456,6 +460,9 @@ def batch_launch_session(args: Dict[str, Any]) -> Dict[str, Any]:
                 persistent=bool(args.get("persistent", False)),
                 queue_monitor=bool(args.get("queue_monitor", False)),
                 rate_limit=int(args.get("rate_limit", 0) or 0),
+                auto_solve_captcha=bool(args.get("auto_solve_captcha", False)),
+                humanlike=bool(args.get("humanlike", False)),
+                run_macro=args.get("run_macro"),
             )
             spawned.append(mgr.as_dict(s))
         except Exception as e:  # noqa: BLE001 — batch must not bail on one failure
@@ -545,6 +552,51 @@ def ratelimit_set(args: Dict[str, Any]) -> Dict[str, Any]:
     )
     RateLimiter(path).set_limit(args["host"], int(args["max_per_minute"]))
     return {"ok": True, "host": args["host"], "max_per_minute": int(args["max_per_minute"])}
+
+
+# --- macros ---
+
+def _macros_store():
+    import actions
+    return actions.ScriptStore(
+        os.environ.get(
+            "ACTIONS_STORE",
+            str(Path.home() / ".camoufox" / "macros"),
+        )
+    )
+
+
+def list_macros(args: Dict[str, Any]) -> Dict[str, Any]:
+    return {"macros": _macros_store().list()}
+
+
+def show_macro(args: Dict[str, Any]) -> Dict[str, Any]:
+    script = _macros_store().load(args["name"])
+    return {
+        "name": script.name,
+        "actions": script.actions,
+        "metadata": getattr(script, "metadata", {}),
+    }
+
+
+def save_macro(args: Dict[str, Any]) -> Dict[str, Any]:
+    """Upsert a macro from a JSON blob. Args: name, actions (list), metadata (dict)."""
+    import actions as actions_mod
+    script = actions_mod.ActionScript(
+        name=args["name"],
+        actions=args.get("actions") or [],
+        metadata=args.get("metadata") or {},
+    )
+    errors = script.validate()
+    if errors:
+        raise ValueError(f"invalid script: {'; '.join(errors)}")
+    _macros_store().save(script)
+    return {"saved": args["name"], "action_count": len(script.actions)}
+
+
+def delete_macro(args: Dict[str, Any]) -> Dict[str, Any]:
+    _macros_store().delete(args["name"])
+    return {"deleted": args["name"]}
 
 
 # --- creepjs scoring ---
@@ -673,4 +725,9 @@ COMMANDS = {
     "delete-task": delete_task,
 
     "score-profile-creepjs": score_profile_creepjs,
+
+    "list-macros": list_macros,
+    "show-macro": show_macro,
+    "save-macro": save_macro,
+    "delete-macro": delete_macro,
 }

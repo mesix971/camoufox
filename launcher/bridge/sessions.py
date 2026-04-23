@@ -187,6 +187,10 @@ class SessionManager:
         persistent: bool = False,
         queue_monitor: bool = False,
         rate_limit: int = 0,
+        auto_solve_captcha: bool = False,
+        humanlike: bool = False,
+        run_macro: Optional[str] = None,
+        record_macro: Optional[str] = None,
         runner_argv_extra: Optional[List[str]] = None,
     ) -> Session:
         """Start a detached session_runner subprocess. Returns the persisted Session."""
@@ -215,6 +219,14 @@ class SessionManager:
             argv += ["--queue-monitor"]
         if rate_limit > 0:
             argv += ["--rate-limit", str(rate_limit)]
+        if auto_solve_captcha:
+            argv += ["--auto-solve-captcha"]
+        if humanlike:
+            argv += ["--humanlike"]
+        if run_macro:
+            argv += ["--run-macro", run_macro]
+        if record_macro:
+            argv += ["--record-macro", record_macro]
         if runner_argv_extra:
             argv += list(runner_argv_extra)
 

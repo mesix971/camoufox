@@ -172,6 +172,12 @@ def main(argv=None) -> int:
                     help="per-host rate cap (0 = use global default)")
     ap.add_argument("--auto-solve-captcha", action="store_true",
                     help="auto-solve Turnstile/reCAPTCHA/hCaptcha using configured providers")
+    ap.add_argument("--humanlike", action="store_true",
+                    help="route clicks/fills through the humanlike cursor module")
+    ap.add_argument("--run-macro", metavar="PATH_OR_NAME",
+                    help="load and run an action-DSL script after landing on --url")
+    ap.add_argument("--record-macro", metavar="NAME",
+                    help="record user interactions into a named macro until the session ends")
     args = ap.parse_args(argv)
 
     signal.signal(signal.SIGTERM, _handle_signal)
@@ -254,6 +260,28 @@ def main(argv=None) -> int:
                 if solver:
                     _detect_and_solve_captcha(page, solver, args.url)
 
+            humanlike_mod = None
+            if args.humanlike:
+                try:
+                    import humanlike  # type: ignore
+                    humanlike_mod = humanlike
+                    _log("humanlike cursor/typing enabled")
+                except ImportError:
+                    _log("humanlike requested but module not installed")
+
+            if args.run_macro:
+                _run_macro(page, args.run_macro, humanlike_mod)
+
+            recorder = None
+            if args.record_macro:
+                try:
+                    from actions import Recorder  # type: ignore
+                    recorder = Recorder(args.record_macro)
+                    recorder.start(page)
+                    _log(f"recording macro: {args.record_macro}")
+                except ImportError:
+                    _log("record-macro requested but actions module not installed")
+
             _log("browser ready; waiting for stop signal")
 
             if args.queue_monitor:
@@ -273,6 +301,18 @@ def main(argv=None) -> int:
                 detect_queue=detect_queue,
             )
             _log("stop signal received; closing browser")
+            if recorder is not None:
+                try:
+                    script = recorder.stop()
+                    from actions import ScriptStore  # type: ignore
+                    store = ScriptStore(os.environ.get(
+                        "ACTIONS_STORE",
+                        str(Path.home() / ".camoufox" / "macros"),
+                    ))
+                    store.save(script)
+                    _log(f"macro saved: {script.name} ({len(script.actions)} actions)")
+                except Exception as e:  # noqa: BLE001
+                    _log(f"could not save macro: {e}")
     except Exception as e:  # noqa: BLE001
         _log(f"FATAL: {type(e).__name__}: {e}")
         _log(traceback.format_exc())
@@ -344,6 +384,40 @@ def _main_loop(page, args, limiter: RateLimiter, detect_queue=None) -> None:
                         queue_notified = True
             except Exception:  # noqa: BLE001
                 pass
+
+
+def _run_macro(page, path_or_name: str, humanlike_mod) -> None:
+    """Load an action script by file path or store name, then execute it."""
+    try:
+        from actions import ActionScript, run_script, ScriptStore  # type: ignore
+    except ImportError:
+        _log("run-macro requested but actions module not installed")
+        return
+    script = None
+    p = Path(path_or_name)
+    if p.exists():
+        try:
+            script = ActionScript.from_json(p.read_text())
+        except Exception as e:  # noqa: BLE001
+            _log(f"could not load macro {p}: {e}")
+            return
+    else:
+        try:
+            store = ScriptStore(os.environ.get(
+                "ACTIONS_STORE",
+                str(Path.home() / ".camoufox" / "macros"),
+            ))
+            script = store.load(path_or_name)
+        except Exception as e:  # noqa: BLE001
+            _log(f"could not load macro '{path_or_name}': {e}")
+            return
+    _log(f"running macro: {script.name} ({len(script.actions)} actions)")
+    try:
+        results = run_script(page, script, humanlike_module=humanlike_mod)
+        ok = sum(1 for r in results if r.ok)
+        _log(f"macro finished: {ok}/{len(results)} actions ok")
+    except Exception as e:  # noqa: BLE001
+        _log(f"macro error: {type(e).__name__}: {e}")
 
 
 def _jitter(seconds: float, pct: float = 0.2) -> float:
