@@ -30,7 +30,22 @@ function resolvePythonRoot(): string {
 }
 
 const PYTHON_ROOT = resolvePythonRoot();
-const PYTHON = process.env.CAMOUFOX_PYTHON || "python3";
+
+// Resolve the Python command. On Windows, `python3.exe` is usually the
+// Microsoft Store redirect stub (opens the Store instead of running Python),
+// so we use `py -3` (the Python Launcher bundled with the python.org
+// installer) which always resolves to the real interpreter.
+function resolvePython(): [string, string[]] {
+  if (process.env.CAMOUFOX_PYTHON) {
+    return [process.env.CAMOUFOX_PYTHON, []];
+  }
+  if (process.platform === "win32") {
+    return ["py", ["-3"]];
+  }
+  return ["python3", []];
+}
+
+const [PYTHON_CMD, PYTHON_PREARGS] = resolvePython();
 
 export interface BridgeOptions {
   timeoutMs?: number;
@@ -55,7 +70,7 @@ export async function callBridge<T = unknown>(
   ];
 
   return new Promise<T>((resolvePromise, reject) => {
-    const child = spawn(PYTHON, argv, {
+    const child = spawn(PYTHON_CMD, [...PYTHON_PREARGS, ...argv], {
       cwd: PYTHON_ROOT,
       env: {
         ...process.env,
