@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import type { BatchLaunchResult, ProxyStrategy } from "../../shared/types";
+import type {
+  BatchLaunchResult, LaunchOptions, ProxyStrategy,
+} from "../../shared/types";
 import { api } from "../api";
 import { useAppStore } from "../store";
+import { AdvancedLaunchOptions } from "./AdvancedLaunchOptions";
 import { Modal } from "./Modal";
 
 interface Props {
@@ -25,11 +28,13 @@ export function BatchLaunchModal({ open, onClose }: Props) {
   const [result, setResult] = useState<BatchLaunchResult | null>(null);
   const [osFilter, setOsFilter] = useState<string>("");
   const [tagFilter, setTagFilter] = useState<string>("");
+  const [advanced, setAdvanced] = useState<LaunchOptions>({});
 
   useEffect(() => {
     if (open) {
       setSelected(new Set());
       setResult(null);
+      setAdvanced({});
     }
   }, [open]);
 
@@ -75,6 +80,11 @@ export function BatchLaunchModal({ open, onClose }: Props) {
       if (strategy === "round-robin" && countryFilter) {
         args.proxy_filter = { country: countryFilter };
       }
+      if (advanced.warmup) args.warmup = true;
+      if (advanced.persistent) args.persistent = true;
+      if (advanced.queue_monitor) args.queue_monitor = true;
+      if (advanced.auto_refresh) args.auto_refresh = advanced.auto_refresh;
+      if (advanced.rate_limit) args.rate_limit = advanced.rate_limit;
       const res = await api().batchLaunchSession(args) as BatchLaunchResult;
       setResult(res);
       await refreshSessions();
@@ -203,6 +213,9 @@ export function BatchLaunchModal({ open, onClose }: Props) {
             <input type="checkbox" checked={headless} onChange={(e) => setHeadless(e.target.checked)} />
             Headless (sans interface)
           </label>
+          <div className="col-span-2">
+            <AdvancedLaunchOptions value={advanced} onChange={setAdvanced} />
+          </div>
         </div>
 
         {result && (

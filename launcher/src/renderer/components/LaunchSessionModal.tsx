@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
+import type { LaunchOptions } from "../../shared/types";
 import { api } from "../api";
 import { useAppStore } from "../store";
+import { AdvancedLaunchOptions } from "./AdvancedLaunchOptions";
 import { Modal } from "./Modal";
 
 interface Props {
@@ -19,6 +21,7 @@ export function LaunchSessionModal({ open, onClose, initialProfileId }: Props) {
   const [proxyId, setProxyId] = useState("");
   const [url, setUrl] = useState("");
   const [headless, setHeadless] = useState(false);
+  const [advanced, setAdvanced] = useState<LaunchOptions>({});
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -27,6 +30,7 @@ export function LaunchSessionModal({ open, onClose, initialProfileId }: Props) {
       setProxyId("");
       setUrl("");
       setHeadless(false);
+      setAdvanced({});
     }
   }, [open, initialProfileId]);
 
@@ -49,6 +53,11 @@ export function LaunchSessionModal({ open, onClose, initialProfileId }: Props) {
       };
       if (proxyId) args.proxy_id = proxyId;
       if (url) args.url = url;
+      if (advanced.warmup) args.warmup = true;
+      if (advanced.persistent) args.persistent = true;
+      if (advanced.queue_monitor) args.queue_monitor = true;
+      if (advanced.auto_refresh) args.auto_refresh = advanced.auto_refresh;
+      if (advanced.rate_limit) args.rate_limit = advanced.rate_limit;
       await api().launchSession(args);
       await refreshSessions();
       showToast("success", "Session démarrée");
@@ -106,6 +115,8 @@ export function LaunchSessionModal({ open, onClose, initialProfileId }: Props) {
           <input type="checkbox" checked={headless} onChange={(e) => setHeadless(e.target.checked)} />
           Headless (sans interface)
         </label>
+
+        <AdvancedLaunchOptions value={advanced} onChange={setAdvanced} />
       </div>
     </Modal>
   );

@@ -2,8 +2,11 @@ import { useEffect, useState } from "react";
 import type { ProfileSummary } from "../../shared/types";
 import { api } from "../api";
 import { BindProxyModal } from "../components/BindProxyModal";
+import { ImportProfileModal } from "../components/ImportProfileModal";
 import { LaunchSessionModal } from "../components/LaunchSessionModal";
 import { NewProfileModal } from "../components/NewProfileModal";
+import { ProfileEditModal } from "../components/ProfileEditModal";
+import { TagList } from "../components/TagPill";
 import { useAppStore } from "../store";
 
 export function ProfilesPage() {
@@ -12,8 +15,10 @@ export function ProfilesPage() {
     proxies, refreshProxies, showToast,
   } = useAppStore();
   const [showNew, setShowNew] = useState(false);
+  const [showImport, setShowImport] = useState(false);
   const [launchFor, setLaunchFor] = useState<string | null>(null);
   const [bindFor, setBindFor] = useState<ProfileSummary | null>(null);
+  const [editFor, setEditFor] = useState<ProfileSummary | null>(null);
 
   useEffect(() => {
     refreshProfiles();
@@ -38,6 +43,40 @@ export function ProfilesPage() {
     }
   };
 
+  const clone = async (p: ProfileSummary) => {
+    if (!confirm(`Cloner le profil « ${p.name} » ?`)) return;
+    try {
+      await api().cloneProfile({ id: p.id });
+      await refreshProfiles();
+      showToast("success", "Profil cloné");
+    } catch (e) {
+      showToast("error", (e as Error).message);
+    }
+  };
+
+  const exportOne = async (p: ProfileSummary) => {
+    try {
+      const res = await api().exportProfile({ id: p.id }) as {
+        profile: Record<string, unknown>; export_version: number;
+      };
+      const blob = new Blob([JSON.stringify(res, null, 2)], {
+        type: "application/json",
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const safe = (p.name || p.id).replace(/[^a-zA-Z0-9_.-]+/g, "_");
+      a.download = `${safe}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      showToast("success", "Profil exporté");
+    } catch (e) {
+      showToast("error", (e as Error).message);
+    }
+  };
+
   return (
     <div className="h-full flex flex-col">
       <div className="flex items-center justify-between px-4 py-3 border-b border-surface-700">
@@ -48,6 +87,9 @@ export function ProfilesPage() {
         <div className="flex items-center gap-2">
           <button type="button" className="btn-ghost" onClick={() => refreshProfiles()} disabled={profilesLoading}>
             {profilesLoading ? "..." : "Rafraîchir"}
+          </button>
+          <button type="button" className="btn-ghost" onClick={() => setShowImport(true)}>
+            Importer
           </button>
           <button type="button" className="btn-primary" onClick={() => setShowNew(true)}>
             + Nouveau profil
@@ -89,13 +131,34 @@ export function ProfilesPage() {
                 <td className="px-4 py-2">{p.os}</td>
                 <td className="px-4 py-2">{p.locale}</td>
                 <td className="px-4 py-2 text-xs text-surface-100/60">{proxyLabel(p.proxy_id)}</td>
-                <td className="px-4 py-2 text-xs">{p.tags.join(", ") || "-"}</td>
+                <td className="px-4 py-2"><TagList tags={p.tags} /></td>
                 <td className="px-4 py-2 text-xs text-surface-100/60">
                   {p.last_used_at ? new Date(p.last_used_at).toLocaleString() : "-"}
                 </td>
                 <td className="px-4 py-2 text-right">{p.use_count}</td>
                 <td className="px-4 py-2 text-right">
-                  <div className="flex items-center justify-end gap-1">
+                  <div className="flex items-center justify-end gap-1 flex-wrap">
+                    <button
+                      type="button"
+                      className="btn-ghost !py-1 !text-xs"
+                      onClick={() => setEditFor(p)}
+                    >
+                      Éditer
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-ghost !py-1 !text-xs"
+                      onClick={() => clone(p)}
+                    >
+                      Cloner
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-ghost !py-1 !text-xs"
+                      onClick={() => exportOne(p)}
+                    >
+                      Exporter
+                    </button>
                     <button
                       type="button"
                       className="btn-ghost !py-1 !text-xs"
@@ -126,6 +189,7 @@ export function ProfilesPage() {
       </div>
 
       <NewProfileModal open={showNew} onClose={() => setShowNew(false)} />
+      <ImportProfileModal open={showImport} onClose={() => setShowImport(false)} />
       <LaunchSessionModal
         open={launchFor !== null}
         onClose={() => setLaunchFor(null)}
@@ -135,6 +199,11 @@ export function ProfilesPage() {
         open={bindFor !== null}
         onClose={() => setBindFor(null)}
         profile={bindFor}
+      />
+      <ProfileEditModal
+        open={editFor !== null}
+        onClose={() => setEditFor(null)}
+        profile={editFor}
       />
     </div>
   );

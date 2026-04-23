@@ -2,6 +2,8 @@ import { DashboardPage } from "./pages/DashboardPage";
 import { ProfilesPage } from "./pages/ProfilesPage";
 import { ProxiesPage } from "./pages/ProxiesPage";
 import { SessionsPage } from "./pages/SessionsPage";
+import { SettingsPage } from "./pages/SettingsPage";
+import { TasksPage } from "./pages/TasksPage";
 import { useAppStore } from "./store";
 
 const TABS = [
@@ -9,6 +11,8 @@ const TABS = [
   { id: "profiles" as const, label: "Profils" },
   { id: "proxies" as const, label: "Proxies" },
   { id: "sessions" as const, label: "Sessions" },
+  { id: "tasks" as const, label: "Tâches" },
+  { id: "settings" as const, label: "Paramètres" },
 ];
 
 export function App() {
@@ -42,6 +46,8 @@ export function App() {
         {tab === "profiles" && <ProfilesPage />}
         {tab === "proxies" && <ProxiesPage />}
         {tab === "sessions" && <SessionsPage />}
+        {tab === "tasks" && <TasksPage />}
+        {tab === "settings" && <SettingsPage />}
       </main>
 
       {toast && (
