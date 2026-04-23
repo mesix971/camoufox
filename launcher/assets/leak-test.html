@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<title>Camoufox — test de fuite</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: system-ui, -apple-system, Segoe UI, sans-serif;
+    margin: 0; padding: 24px; background: #111; color: #eee;
+  }
+  h1 { font-size: 20px; margin: 0 0 16px; }
+  h2 { font-size: 14px; text-transform: uppercase; letter-spacing: .5px;
+       color: #888; margin: 24px 0 8px; font-weight: 600; }
+  .grid { display: grid; grid-template-columns: 220px 1fr; gap: 8px 16px; }
+  .k { color: #9aa; font-family: ui-monospace, monospace; font-size: 12px;
+       align-self: center; }
+  .v { font-family: ui-monospace, monospace; font-size: 12px; word-break: break-all;
+       background: #1a1a1a; padding: 6px 8px; border-radius: 4px; border: 1px solid #222; }
+  .ok { color: #6ee7b7; } .warn { color: #fcd34d; } .bad { color: #fca5a5; }
+  .summary {
+    padding: 16px; background: #1a1f2e; border: 1px solid #2a3040; border-radius: 6px;
+    margin-bottom: 24px;
+  }
+  .score { font-size: 32px; font-weight: bold; }
+  canvas { display: none; }
+</style>
+</head>
+<body>
+<h1>🦊 Camoufox — test de fuite de fingerprint</h1>
+
+<div class="summary">
+  <div>Score de cohérence : <span class="score" id="score">…</span></div>
+  <div id="summary"></div>
+</div>
+
+<h2>Navigator</h2>
+<div class="grid" id="nav"></div>
+
+<h2>Écran & fenêtre</h2>
+<div class="grid" id="screen"></div>
+
+<h2>WebGL</h2>
+<div class="grid" id="webgl"></div>
+
+<h2>Locale & fuseau</h2>
+<div class="grid" id="locale"></div>
+
+<h2>Audio</h2>
+<div class="grid" id="audio"></div>
+
+<h2>Détections bot</h2>
+<div class="grid" id="bot"></div>
+
+<h2>Canvas hash</h2>
+<div class="grid" id="canvas"></div>
+
+<canvas id="c" width="220" height="30"></canvas>
+
+<script>
+function row(parent, k, v, cls='') {
+  const p = document.getElementById(parent);
+  const kEl = document.createElement('div'); kEl.className = 'k'; kEl.textContent = k;
+  const vEl = document.createElement('div'); vEl.className = 'v ' + cls;
+  vEl.textContent = typeof v === 'object' ? JSON.stringify(v) : String(v);
+  p.appendChild(kEl); p.appendChild(vEl);
+}
+
+let score = 100, issues = [];
+function fail(msg, delta=10) { score -= delta; issues.push(msg); }
+
+// --- Navigator
+const n = navigator;
+row('nav', 'userAgent', n.userAgent);
+row('nav', 'platform', n.platform);
+row('nav', 'language', n.language);
+row('nav', 'languages', n.languages);
+row('nav', 'hardwareConcurrency', n.hardwareConcurrency);
+row('nav', 'deviceMemory', n.deviceMemory ?? '(non exposé)');
+row('nav', 'vendor', n.vendor);
+row('nav', 'webdriver', n.webdriver, n.webdriver ? 'bad' : 'ok');
+if (n.webdriver) fail('navigator.webdriver = true (bot signal)', 25);
+
+// --- Screen
+row('screen', 'width×height', `${screen.width}×${screen.height}`);
+row('screen', 'availW×availH', `${screen.availWidth}×${screen.availHeight}`);
+row('screen', 'colorDepth', screen.colorDepth);
+row('screen', 'pixelDepth', screen.pixelDepth);
+row('screen', 'devicePixelRatio', window.devicePixelRatio);
+row('screen', 'outerW×outerH', `${outerWidth}×${outerHeight}`);
+row('screen', 'innerW×innerH', `${innerWidth}×${innerHeight}`);
+if (screen.width < 800 || screen.height < 600)
+  fail('résolution inhabituellement petite', 5);
+
+// --- WebGL
+try {
+  const gl = document.createElement('canvas').getContext('webgl')
+           || document.createElement('canvas').getContext('experimental-webgl');
+  if (!gl) { row('webgl', '(webgl)', 'non disponible', 'warn'); fail('pas de WebGL', 10); }
+  else {
+    const ext = gl.getExtension('WEBGL_debug_renderer_info');
+    const vendor = ext ? gl.getParameter(ext.UNMASKED_VENDOR_WEBGL) : gl.getParameter(gl.VENDOR);
+    const renderer = ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER);
+    row('webgl', 'vendor', vendor);
+    row('webgl', 'renderer', renderer);
+    row('webgl', 'version', gl.getParameter(gl.VERSION));
+    row('webgl', 'shadingLangVer', gl.getParameter(gl.SHADING_LANGUAGE_VERSION));
+    if (/swiftshader/i.test(renderer)) fail('WebGL = SwiftShader (headless signal)', 15);
+  }
+} catch(e) { row('webgl', 'erreur', e.message, 'warn'); }
+
+// --- Locale
+try {
+  const d = new Intl.DateTimeFormat().resolvedOptions();
+  row('locale', 'timezone', d.timeZone);
+  row('locale', 'locale', d.locale);
+  row('locale', 'calendar', d.calendar);
+  row('locale', 'numbering', d.numberingSystem);
+} catch(e) { row('locale', 'erreur', e.message, 'warn'); }
+row('locale', 'Date.getTimezoneOffset()', new Date().getTimezoneOffset() + ' min');
+
+// --- Audio
+try {
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (AC) {
+    const ctx = new AC();
+    row('audio', 'sampleRate', ctx.sampleRate);
+    row('audio', 'state', ctx.state);
+    row('audio', 'maxChannelCount', ctx.destination.maxChannelCount);
+    ctx.close();
+  } else {
+    row('audio', '(audiocontext)', 'non supporté', 'warn');
+  }
+} catch(e) { row('audio', 'erreur', e.message, 'warn'); }
+
+// --- Bot signals
+const automation = [
+  !!window.__nightmare, '__nightmare',
+  !!window.callPhantom || !!window._phantom, 'phantom',
+  !!window.__webdriver_evaluate, '__webdriver_evaluate',
+  !!document.documentElement.getAttribute('webdriver'), 'attr webdriver',
+];
+const hits = [];
+for (let i = 0; i < automation.length; i += 2) {
+  if (automation[i]) hits.push(automation[i+1]);
+}
+row('bot', 'globals d\'automation', hits.length ? hits.join(', ') : 'aucun', hits.length ? 'bad' : 'ok');
+if (hits.length) fail('globals automation détectées: ' + hits.join(','), 20);
+row('bot', 'plugins.length', navigator.plugins.length);
+row('bot', 'mimeTypes.length', navigator.mimeTypes.length);
+if (navigator.plugins.length === 0) fail('0 plugins (signal Playwright/Puppeteer)', 10);
+row('bot', 'permissions.notifications',
+    await navigator.permissions?.query?.({name:'notifications'})?.then(x=>x.state)
+      .catch(()=>'n/a') ?? 'n/a');
+
+// --- Canvas hash
+try {
+  const c = document.getElementById('c'); const x = c.getContext('2d');
+  x.textBaseline = 'top'; x.font = '14px Arial';
+  x.fillStyle = '#f60'; x.fillRect(0, 0, 100, 20);
+  x.fillStyle = '#069'; x.fillText('Cwm fjordbank glyphs vext quiz, 😀 🦊', 2, 2);
+  x.fillStyle = 'rgba(102, 204, 0, 0.7)'; x.fillText('Cwm fjordbank glyphs', 4, 10);
+  const url = c.toDataURL();
+  // Simple non-crypto hash
+  let h = 0; for (const ch of url) h = ((h << 5) - h + ch.charCodeAt(0)) & 0xffffffff;
+  row('canvas', 'toDataURL len', url.length);
+  row('canvas', 'hash (djb2-like)', h.toString(16));
+} catch(e) { row('canvas', 'erreur', e.message, 'warn'); }
+
+// --- Summary
+document.getElementById('score').textContent = score + ' / 100';
+document.getElementById('score').className = 'score ' + (score >= 80 ? 'ok' : score >= 60 ? 'warn' : 'bad');
+const sum = document.getElementById('summary');
+if (issues.length === 0) {
+  sum.innerHTML = '<span class="ok">✓ Aucun problème détecté — le fingerprint semble cohérent.</span>';
+} else {
+  sum.innerHTML = '<strong>Problèmes détectés :</strong><ul style="margin:8px 0 0 16px">' +
+    issues.map(i => '<li class="warn">' + i + '</li>').join('') + '</ul>';
+}
+</script>
+</body>
+</html>

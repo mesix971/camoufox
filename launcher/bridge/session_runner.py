@@ -33,6 +33,84 @@ from launcher.bridge.retry import RetrySpec, retry
 from launcher.bridge.webhook import notify as webhook_notify
 
 
+def _captcha_store_path() -> str:
+    return os.environ.get(
+        "CAPTCHAPOOL_STORE",
+        str(Path.home() / ".camoufox" / "captchapool"),
+    )
+
+
+def _maybe_build_solver():
+    """Build a captcha Solver from saved providers, or return None if none configured."""
+    try:
+        import captchapool  # type: ignore
+    except ImportError:
+        return None
+    try:
+        store = captchapool.ProviderStore(_captcha_store_path())
+        if not store.list():
+            return None
+        return store.build_solver()
+    except Exception:  # noqa: BLE001 — captcha is opt-in; never crash the session
+        return None
+
+
+def _detect_and_solve_captcha(page, solver, url: str) -> bool:
+    """Best-effort: look for a Turnstile / reCAPTCHA / hCaptcha iframe on the
+    current page and, if found, ask the solver for a token and inject it.
+
+    Returns True if a captcha was solved, False otherwise. Never raises —
+    captcha integration is opt-in.
+    """
+    if solver is None:
+        return False
+    try:
+        iframe_info = page.evaluate(
+            """() => {
+              const f = [...document.querySelectorAll('iframe')]
+                .map(e => e.src || '').find(s =>
+                  s.includes('challenges.cloudflare.com') ||
+                  s.includes('recaptcha') ||
+                  s.includes('hcaptcha'));
+              if (!f) return null;
+              const siteKeyMatch = f.match(/[?&]k=([^&]+)/) ||
+                                   f.match(/[?&]sitekey=([^&]+)/);
+              const kind = f.includes('challenges.cloudflare.com') ? 'turnstile' :
+                           f.includes('hcaptcha') ? 'hcaptcha' : 'recaptcha_v2';
+              return { kind, sitekey: siteKeyMatch ? siteKeyMatch[1] : null };
+            }"""
+        )
+    except Exception:  # noqa: BLE001
+        return False
+    if not iframe_info or not iframe_info.get("sitekey"):
+        return False
+    kind = iframe_info["kind"]
+    sitekey = iframe_info["sitekey"]
+    _log(f"captcha detected: {kind} sitekey={sitekey[:8]}…")
+    try:
+        token = solver.solve(kind, site_key=sitekey, url=url)
+    except Exception as e:  # noqa: BLE001
+        _log(f"captcha solver failed: {type(e).__name__}: {e}")
+        return False
+    try:
+        # Inject the token into the standard response fields so the page's
+        # submit handler can use it. Works for most sites.
+        page.evaluate(
+            """(token) => {
+              document.querySelectorAll(
+                '[name=g-recaptcha-response], [name=h-captcha-response], [name=cf-turnstile-response]'
+              ).forEach(el => { el.value = token; });
+              if (window.turnstile && window.turnstile.execute) { /* noop */ }
+            }""",
+            token,
+        )
+        _log(f"captcha {kind} solved + token injected")
+        return True
+    except Exception as e:  # noqa: BLE001
+        _log(f"captcha token injection failed: {e}")
+        return False
+
+
 # Defer heavy imports so import-time errors are reported cleanly in the log.
 def _log(msg: str) -> None:
     ts = datetime.now(timezone.utc).isoformat(timespec="seconds")
@@ -92,6 +170,8 @@ def main(argv=None) -> int:
                     help="detect queue pages and notify via webhook when near front")
     ap.add_argument("--rate-limit", type=int, default=0, metavar="PER_MIN",
                     help="per-host rate cap (0 = use global default)")
+    ap.add_argument("--auto-solve-captcha", action="store_true",
+                    help="auto-solve Turnstile/reCAPTCHA/hCaptcha using configured providers")
     args = ap.parse_args(argv)
 
     signal.signal(signal.SIGTERM, _handle_signal)
@@ -165,8 +245,14 @@ def main(argv=None) -> int:
                 warmup_mod.warmup(page, seed=hash(args.session_id) & 0xFFFF)
                 _log("warmup done")
 
+            solver = _maybe_build_solver() if args.auto_solve_captcha else None
+            if args.auto_solve_captcha and solver is None:
+                _log("auto-solve-captcha requested but no providers configured; skipping")
+
             if args.url:
                 _goto_with_retry(page, args.url, limiter)
+                if solver:
+                    _detect_and_solve_captcha(page, solver, args.url)
 
             _log("browser ready; waiting for stop signal")
 
