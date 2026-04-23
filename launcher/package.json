@@ -61,6 +61,33 @@
         ]
       },
       {
+        "from": "../captchapool",
+        "to": "python/captchapool",
+        "filter": [
+          "**/*.py",
+          "!**/tests/**",
+          "!**/__pycache__/**"
+        ]
+      },
+      {
+        "from": "../queuepool",
+        "to": "python/queuepool",
+        "filter": [
+          "**/*.py",
+          "!**/tests/**",
+          "!**/__pycache__/**"
+        ]
+      },
+      {
+        "from": "../taskqueue",
+        "to": "python/taskqueue",
+        "filter": [
+          "**/*.py",
+          "!**/tests/**",
+          "!**/__pycache__/**"
+        ]
+      },
+      {
         "from": "./bridge",
         "to": "python/launcher/bridge",
         "filter": [
@@ -68,6 +95,10 @@
           "!**/tests/**",
           "!**/__pycache__/**"
         ]
+      },
+      {
+        "from": "./assets",
+        "to": "assets"
       }
     ],
     "asar": true,
