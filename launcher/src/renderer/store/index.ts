@@ -2,12 +2,12 @@
 
 import { create } from "zustand";
 import type {
-  Archetype, ProfileSummary, ProxySummary, Session,
+  Archetype, ProfileSummary, ProxySummary, Session, Task,
 } from "../../shared/types";
 import { api } from "../api";
 
 export interface AppState {
-  tab: "dashboard" | "profiles" | "proxies" | "sessions";
+  tab: "dashboard" | "profiles" | "proxies" | "sessions" | "tasks" | "settings";
   setTab: (t: AppState["tab"]) => void;
 
   profiles: ProfileSummary[];
@@ -24,6 +24,12 @@ export interface AppState {
   sessionsLoading: boolean;
   sessionsError: string | null;
   refreshSessions: () => Promise<void>;
+
+  tasks: Task[];
+  tasksStats: Record<string, number>;
+  tasksLoading: boolean;
+  tasksError: string | null;
+  refreshTasks: () => Promise<void>;
 
   archetypes: Archetype[];
   loadArchetypes: () => Promise<void>;
@@ -74,6 +80,26 @@ export const useAppStore = create<AppState>((set, get) => ({
       set({ sessions: res.sessions, sessionsLoading: false });
     } catch (e) {
       set({ sessionsError: (e as Error).message, sessionsLoading: false });
+    }
+  },
+
+  tasks: [],
+  tasksStats: {},
+  tasksLoading: false,
+  tasksError: null,
+  refreshTasks: async () => {
+    set({ tasksLoading: true, tasksError: null });
+    try {
+      const res = await api().listTasks() as {
+        tasks: Task[]; stats: Record<string, number>;
+      };
+      set({
+        tasks: res.tasks,
+        tasksStats: res.stats || {},
+        tasksLoading: false,
+      });
+    } catch (e) {
+      set({ tasksError: (e as Error).message, tasksLoading: false });
     }
   },
 

@@ -12,6 +12,12 @@ const STATUS_LABELS: Record<string, string> = {
   flagged: "signalé",
   dead: "mort",
   untested: "non testé",
+  // Task statuses
+  queued: "En file",
+  success: "Réussie",
+  failed: "Échouée",
+  retrying: "Nouvelle tentative",
+  cancelled: "Annulée",
 };
 
 export function StatusBadge({ status, children }: Props) {

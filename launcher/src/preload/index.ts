@@ -47,6 +47,8 @@ const api = {
   listSessions: () => invoke(IPC.listSessions),
   launchSession: (args: {
     profile_id: string; proxy_id?: string; url?: string; headless?: boolean;
+    warmup?: boolean; auto_refresh?: number; persistent?: boolean;
+    queue_monitor?: boolean; rate_limit?: number;
   }) => invoke(IPC.launchSession, args),
   killSession: (id: string) => invoke(IPC.killSession, { id }),
   sessionLog: (id: string, lines = 200) => invoke(IPC.sessionLog, { id, lines }),
@@ -58,12 +60,49 @@ const api = {
     proxy_filter?: { provider?: string; country?: string; tag?: string; status?: string };
     url?: string;
     headless?: boolean;
+    warmup?: boolean;
+    auto_refresh?: number;
+    persistent?: boolean;
+    queue_monitor?: boolean;
+    rate_limit?: number;
   }) => invoke(IPC.batchLaunchSession, args),
 
   // binding + dashboard
   bindProfileProxy: (args: { profile_id: string; proxy_id: string | null }) =>
     invoke(IPC.bindProfileProxy, args),
   dashboardSummary: () => invoke(IPC.dashboardSummary),
+
+  // profile clone/update/export/import
+  cloneProfile: (args: { id: string; name?: string; tags?: string[] }) =>
+    invoke(IPC.cloneProfile, args),
+  updateProfile: (args: { id: string; updates: Record<string, unknown> }) =>
+    invoke(IPC.updateProfile, args),
+  exportProfile: (args: { id: string }) => invoke(IPC.exportProfile, args),
+  importProfile: (args: { profile: Record<string, unknown>; rename?: boolean }) =>
+    invoke(IPC.importProfile, args),
+
+  // webhook
+  setWebhook: (args: { url: string }) => invoke(IPC.setWebhook, args),
+  getWebhook: () => invoke(IPC.getWebhook, {}),
+  testWebhook: (args?: { content?: string; level?: string }) =>
+    invoke(IPC.testWebhook, args ?? {}),
+
+  // ratelimit
+  ratelimitStats: (args?: { host?: string }) =>
+    invoke(IPC.ratelimitStats, args ?? {}),
+  ratelimitSet: (args: { host: string; max_per_minute: number }) =>
+    invoke(IPC.ratelimitSet, args),
+
+  // tasks
+  enqueueTask: (args: {
+    action: Record<string, unknown>;
+    delay_seconds?: number;
+    run_at?: string;
+    tags?: string[];
+  }) => invoke(IPC.enqueueTask, args),
+  listTasks: (args?: { status?: string; tag?: string }) =>
+    invoke(IPC.listTasks, args ?? {}),
+  deleteTask: (args: { id: string }) => invoke(IPC.deleteTask, args),
 };
 
 contextBridge.exposeInMainWorld("api", api);

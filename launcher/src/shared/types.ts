@@ -141,6 +141,22 @@ export const IPC = {
 
   bindProfileProxy: "bind-profile-proxy",
   dashboardSummary: "dashboard-summary",
+
+  cloneProfile: "clone-profile",
+  updateProfile: "update-profile",
+  exportProfile: "export-profile",
+  importProfile: "import-profile",
+
+  setWebhook: "set-webhook",
+  getWebhook: "get-webhook",
+  testWebhook: "test-webhook",
+
+  ratelimitStats: "ratelimit-stats",
+  ratelimitSet: "ratelimit-set",
+
+  enqueueTask: "enqueue-task",
+  listTasks: "list-tasks",
+  deleteTask: "delete-task",
 } as const;
 
 export interface DashboardSummary {
@@ -169,3 +185,46 @@ export interface BatchLaunchResult {
 export type ProxyStrategy = "bound" | "round-robin" | "fixed" | "none";
 
 export type IpcChannel = typeof IPC[keyof typeof IPC];
+
+// --- task queue ---
+
+export type TaskStatus =
+  | "queued"
+  | "running"
+  | "success"
+  | "failed"
+  | "retrying"
+  | "cancelled";
+
+export interface Task {
+  id: string;
+  action: Record<string, unknown>;
+  scheduled_at: string;
+  created_at: string;
+  started_at: string | null;
+  finished_at: string | null;
+  status: TaskStatus;
+  attempts: number;
+  retry_policy: Record<string, unknown>;
+  error: string | null;
+  result: Record<string, unknown> | null;
+  tags: string[];
+}
+
+export type TaskStats = Record<TaskStatus, number> | Record<string, number>;
+
+export interface RatelimitHost {
+  events_last_minute: number;
+  max_per_minute: number;
+}
+
+export type RatelimitStats = Record<string, RatelimitHost>;
+
+// --- session launch extra options (all optional) ---
+export interface LaunchOptions {
+  warmup?: boolean;
+  auto_refresh?: number;
+  persistent?: boolean;
+  queue_monitor?: boolean;
+  rate_limit?: number;
+}
