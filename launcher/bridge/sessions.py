@@ -171,13 +171,26 @@ class SessionManager:
         if runner_argv_extra:
             argv += list(runner_argv_extra)
 
-        popen = subprocess.Popen(
-            argv,
-            stdout=log_fh,
-            stderr=subprocess.STDOUT,
-            stdin=subprocess.DEVNULL,
-            start_new_session=True,  # detach from parent
-        )
+        popen_kwargs: Dict[str, Any] = {
+            "stdout": log_fh,
+            "stderr": subprocess.STDOUT,
+            "stdin": subprocess.DEVNULL,
+        }
+        if sys.platform == "win32":
+            # Electron/Node spawns us inside a Windows Job Object with
+            # JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE. When this intermediate Python
+            # exits, the job closes and kills session_runner too. Break out of
+            # the job and detach from any console so the browser survives.
+            DETACHED_PROCESS = 0x00000008
+            CREATE_NEW_PROCESS_GROUP = 0x00000200
+            CREATE_BREAKAWAY_FROM_JOB = 0x01000000
+            popen_kwargs["creationflags"] = (
+                DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP | CREATE_BREAKAWAY_FROM_JOB
+            )
+        else:
+            popen_kwargs["start_new_session"] = True  # POSIX setsid
+
+        popen = subprocess.Popen(argv, **popen_kwargs)
         # Close in the parent — the child inherited the FD and owns it now.
         log_fh.close()
 
