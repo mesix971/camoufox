@@ -340,9 +340,14 @@ Normal — `python3.exe` sur Windows est un stub. Le launcher utilise `py -3` de
 ### ✅ Déjà implémenté
 - Fingerprint C++ via `fpgen` (archétypes, 50+ champs cohérents, preset Firefox, 103 tests)
 - Pool de proxies `proxypool` avec parseurs multi-format + rotation (5 stratégies)
-- Captcha solving `captchapool` (CapSolver + 2Captcha, 4 types de challenges)
-- Queue detection `queuepool` (Queue-it, Akamai, Fastly/Shopify, SNKRS, Cloudflare, DataDome)
-- Task queue persistante `taskqueue` avec retry + backoff + multi-worker safe
+- Captcha solving `captchapool` (CapSolver + 2Captcha, 4 types de challenges, 43 tests)
+- Queue detection `queuepool` (Queue-it, Akamai, Fastly/Shopify, SNKRS, Cloudflare, DataDome, 39 tests)
+- Task queue persistante `taskqueue` avec retry + backoff + multi-worker safe (27 tests)
+- **CreepJS auto-scoring** `creepjsscore` — lance un profil sur creepjs.com, scrape FP + Trust score, rejette si < seuil (16 tests)
+- **Humanlike cursor + typing** `humanlike` — courbes de Bézier avec overshoot, délais réalistes, typos optionnels (29 tests)
+- **Action DSL + macro recorder** `actions` — 17 types d'actions (goto/wait_for/click/fill/type/if/repeat/…), recorder via JS shim (61 tests)
+- **Canvas/WebGL pixel noise** — patch C++ P4 draft (`patches/canvas-webgl-pixel-noise.patch`), prêt à appliquer et régénérer depuis l'arbre Firefox
+- **Métriques live** — `launcher/bridge/metrics.py` utilise psutil (lazy) pour CPU%/RAM/IO par PID de session, incluant les enfants
 - Webhook Discord (notifications colorées par niveau)
 - Warmup sessions (2-3 sites innocents avant la cible)
 - Auto-refresh avec jitter ±20 %
@@ -356,15 +361,17 @@ Normal — `python3.exe` sur Windows est un stub. Le launcher utilise `py -3` de
 - `_pid_alive` via ctypes (reliable status tracking)
 - Installeurs multi-OS (AppImage, deb, exe, dmg, zip)
 
-### 🔜 Pas encore implémenté
+### 🔜 Partiellement implémenté — à finir côté UI
 
-- **Canvas/WebGL pixel noise** — nécessite un patch C++ supplémentaire côté Firefox (P4). Le bruit par-pixel à chaque render est nécessaire pour les WAFs qui hashent le canvas (DataDome). Camoufox fait déjà le spoof de base mais pas le noise pixel-par-pixel.
-- **CreepJS auto-scoring pipeline** — job qui lance chaque nouveau profil sur creepjs.com, scrape les résultats, rejette automatiquement les profils avec score < 75 %. Évite les fingerprints cassés qui ne matchent pas les vrais users.
-- **Ghost-cursor** (courbes de Bézier) — remplacer `page.click()` par des mouvements souris humains avec accélération + dépassement + corrections. Pas de lib Python native, il faut coder les courbes Bézier + samples en JS injecté.
-- **Macro recorder** — wrapper autour du `codegen` de Playwright : bouton "Record" dans le launcher → lance Camoufox en mode enregistrement → sauvegarde en JSON/Python → replay possible sur N sessions en batch via le task queue.
-- **Action DSL** — mini-langage YAML/JSON pour scripter `goto → wait → click → fill → submit` sans coder. Le session_runner exécute le script au lieu d'attendre passivement.
-- **Dashboard métriques live** (CPU/RAM/bande passante par session) — nécessite `psutil` + endpoint de métriques temps-réel + graphiques côté UI. Actuellement on ne voit que running/stopped.
-- **Alertes intelligentes** — détection de patterns (session plante en boucle → freeze auto, proxy flag un coup → retest, rate limit répété → backoff exponentiel avec notification).
+- **CreepJS scoring** : backend + commande bridge `score-profile-creepjs` OK, mais le bouton "Tester CreepJS" n'est pas encore dans ProfilesPage.
+- **Humanlike** : flag `--humanlike` fonctionne, mais pas de checkbox dans LaunchSessionModal encore.
+- **Macros** : commandes `list-macros` / `save-macro` / etc. OK et `--run-macro NAME` / `--record-macro NAME` marchent, mais il manque un onglet "Macros" dans l'UI.
+- **Dashboard métriques live** : données dispo via `session-metrics`, mais le rendu (colonnes CPU/RAM) pas encore dans SessionsPage.
+- **Canvas/WebGL noise** : le patch est draft — il faut l'appliquer sur un arbre Firefox, fixer les numéros de ligne, et regénérer.
+
+### 🔜 Pas encore commencé
+
+- **Alertes intelligentes** — détection de patterns (session plante en boucle → freeze auto, rate limit répété → backoff exponentiel avec notification).
 - **Health check scheduler automatique** — daemon qui relance `check-proxies-all` toutes les 10 min et flag les dead/flagged sans intervention.
 
 ---
