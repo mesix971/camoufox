@@ -88,6 +88,33 @@
         ]
       },
       {
+        "from": "../creepjsscore",
+        "to": "python/creepjsscore",
+        "filter": [
+          "**/*.py",
+          "!**/tests/**",
+          "!**/__pycache__/**"
+        ]
+      },
+      {
+        "from": "../humanlike",
+        "to": "python/humanlike",
+        "filter": [
+          "**/*.py",
+          "!**/tests/**",
+          "!**/__pycache__/**"
+        ]
+      },
+      {
+        "from": "../actions",
+        "to": "python/actions",
+        "filter": [
+          "**/*.py",
+          "!**/tests/**",
+          "!**/__pycache__/**"
+        ]
+      },
+      {
         "from": "./bridge",
         "to": "python/launcher/bridge",
         "filter": [
