@@ -13,11 +13,11 @@ export function ProxiesPage() {
   useEffect(() => { refreshProxies(); }, [refreshProxies]);
 
   const remove = async (id: string) => {
-    if (!confirm(`Delete proxy ${id}?`)) return;
+    if (!confirm(`Supprimer le proxy ${id} ?`)) return;
     try {
       await api().deleteProxy(id);
       await refreshProxies();
-      showToast("success", "Proxy deleted");
+      showToast("success", "Proxy supprimé");
     } catch (e) {
       showToast("error", (e as Error).message);
     }
@@ -27,7 +27,7 @@ export function ProxiesPage() {
     try {
       await api().checkProxy(id);
       await refreshProxies();
-      showToast("success", "Checked");
+      showToast("success", "Vérifié");
     } catch (e) {
       showToast("error", (e as Error).message);
     }
@@ -38,7 +38,7 @@ export function ProxiesPage() {
     try {
       const res = await api().checkProxiesAll({ workers: 20 }) as { checked: number; ok: number };
       await refreshProxies();
-      showToast("success", `${res.ok}/${res.checked} healthy`);
+      showToast("success", `${res.ok}/${res.checked} opérationnels`);
     } catch (e) {
       showToast("error", (e as Error).message);
     } finally {
@@ -50,7 +50,7 @@ export function ProxiesPage() {
     try {
       await api().rotateProxySession({ id });
       await refreshProxies();
-      showToast("success", "Session rotated");
+      showToast("success", "Session roulée");
     } catch (e) {
       showToast("error", (e as Error).message);
     }
@@ -71,22 +71,22 @@ export function ProxiesPage() {
             value={filter}
             onChange={(e) => setFilter(e.target.value as typeof filter)}
           >
-            <option value="all">all</option>
-            <option value="active">active</option>
-            <option value="untested">untested</option>
-            <option value="flagged">flagged</option>
-            <option value="dead">dead</option>
+            <option value="all">tous</option>
+            <option value="active">actifs</option>
+            <option value="untested">non testés</option>
+            <option value="flagged">signalés</option>
+            <option value="dead">morts</option>
           </select>
         </div>
         <div className="flex items-center gap-2">
           <button type="button" className="btn-ghost" onClick={checkAll} disabled={checking}>
-            {checking ? "Checking..." : "Check all"}
+            {checking ? "Vérification..." : "Tout vérifier"}
           </button>
           <button type="button" className="btn-ghost" onClick={() => refreshProxies()} disabled={proxiesLoading}>
-            Refresh
+            Rafraîchir
           </button>
           <button type="button" className="btn-primary" onClick={() => setShowImport(true)}>
-            + Import
+            + Importer
           </button>
         </div>
       </div>
@@ -100,20 +100,20 @@ export function ProxiesPage() {
       <div className="flex-1 overflow-y-auto">
         {visible.length === 0 && !proxiesLoading && (
           <div className="p-8 text-center text-surface-100/50">
-            No proxies. Click <b>+ Import</b> to paste a list.
+            Aucun proxy. Cliquez sur <b>+ Importer</b> pour coller une liste.
           </div>
         )}
         <table className="w-full text-sm">
           <thead className="text-xs uppercase text-surface-100/50 bg-surface-800/60 sticky top-0">
             <tr>
-              <th className="text-left px-4 py-2 font-medium">Status</th>
-              <th className="text-left px-4 py-2 font-medium">Provider</th>
-              <th className="text-left px-4 py-2 font-medium">Host:Port</th>
-              <th className="text-left px-4 py-2 font-medium">Country</th>
-              <th className="text-right px-4 py-2 font-medium">Latency</th>
+              <th className="text-left px-4 py-2 font-medium">Statut</th>
+              <th className="text-left px-4 py-2 font-medium">Fournisseur</th>
+              <th className="text-left px-4 py-2 font-medium">Hôte:Port</th>
+              <th className="text-left px-4 py-2 font-medium">Pays</th>
+              <th className="text-right px-4 py-2 font-medium">Latence</th>
               <th className="text-left px-4 py-2 font-medium">Tags</th>
-              <th className="text-left px-4 py-2 font-medium">Last check</th>
-              <th className="text-right px-4 py-2 font-medium">Uses</th>
+              <th className="text-left px-4 py-2 font-medium">Dernière vérification</th>
+              <th className="text-right px-4 py-2 font-medium">Utilisations</th>
               <th className="text-right px-4 py-2 font-medium">Actions</th>
             </tr>
           </thead>
@@ -135,15 +135,15 @@ export function ProxiesPage() {
                 <td className="px-4 py-2 text-right">
                   <div className="flex items-center justify-end gap-1">
                     <button type="button" className="btn-ghost !py-1 !text-xs" onClick={() => checkOne(p.id)}>
-                      Check
+                      Vérifier
                     </button>
                     {p.provider === "iproyal" && (
                       <button type="button" className="btn-ghost !py-1 !text-xs" onClick={() => rotate(p.id)}>
-                        Rotate
+                        Rouler
                       </button>
                     )}
                     <button type="button" className="btn-danger !py-1 !text-xs" onClick={() => remove(p.id)}>
-                      Delete
+                      Supprimer
                     </button>
                   </div>
                 </td>

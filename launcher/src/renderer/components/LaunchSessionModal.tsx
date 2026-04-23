@@ -38,7 +38,7 @@ export function LaunchSessionModal({ open, onClose, initialProfileId }: Props) {
 
   const submit = async () => {
     if (!profileId) {
-      showToast("error", "pick a profile");
+      showToast("error", "choisir un profil");
       return;
     }
     setSubmitting(true);
@@ -51,7 +51,7 @@ export function LaunchSessionModal({ open, onClose, initialProfileId }: Props) {
       if (url) args.url = url;
       await api().launchSession(args);
       await refreshSessions();
-      showToast("success", "Session started");
+      showToast("success", "Session démarrée");
       onClose();
     } catch (e) {
       showToast("error", (e as Error).message);
@@ -64,21 +64,21 @@ export function LaunchSessionModal({ open, onClose, initialProfileId }: Props) {
     <Modal
       open={open}
       onClose={onClose}
-      title="Launch session"
+      title="Lancer une session"
       footer={
         <>
-          <button type="button" className="btn-ghost" onClick={onClose}>Cancel</button>
+          <button type="button" className="btn-ghost" onClick={onClose}>Annuler</button>
           <button type="button" className="btn-primary" onClick={submit} disabled={submitting}>
-            {submitting ? "Starting..." : "Launch"}
+            {submitting ? "Démarrage..." : "Lancer"}
           </button>
         </>
       }
     >
       <div className="space-y-3">
         <div>
-          <label className="block text-xs text-surface-100/60 mb-1">Profile</label>
+          <label className="block text-xs text-surface-100/60 mb-1">Profil</label>
           <select className="input" value={profileId} onChange={(e) => setProfileId(e.target.value)}>
-            <option value="">— select —</option>
+            <option value="">— sélectionner —</option>
             {profiles.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.name} ({p.os}, {p.locale})
@@ -87,9 +87,9 @@ export function LaunchSessionModal({ open, onClose, initialProfileId }: Props) {
           </select>
         </div>
         <div>
-          <label className="block text-xs text-surface-100/60 mb-1">Proxy (optional)</label>
+          <label className="block text-xs text-surface-100/60 mb-1">Proxy (optionnel)</label>
           <select className="input" value={proxyId} onChange={(e) => setProxyId(e.target.value)}>
-            <option value="">(no proxy)</option>
+            <option value="">(aucun proxy)</option>
             {proxies.filter((p) => p.status !== "dead").map((p) => (
               <option key={p.id} value={p.id}>
                 {p.label} [{p.status}] {p.observed_country || p.country || ""}
@@ -98,13 +98,13 @@ export function LaunchSessionModal({ open, onClose, initialProfileId }: Props) {
           </select>
         </div>
         <div>
-          <label className="block text-xs text-surface-100/60 mb-1">Initial URL (optional)</label>
+          <label className="block text-xs text-surface-100/60 mb-1">URL initiale (optionnelle)</label>
           <input className="input" placeholder="https://example.com"
                  value={url} onChange={(e) => setUrl(e.target.value)} />
         </div>
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" checked={headless} onChange={(e) => setHeadless(e.target.checked)} />
-          Headless
+          Headless (sans interface)
         </label>
       </div>
     </Modal>

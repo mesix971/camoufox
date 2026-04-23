@@ -5,8 +5,8 @@ import { SessionsPage } from "./pages/SessionsPage";
 import { useAppStore } from "./store";
 
 const TABS = [
-  { id: "dashboard" as const, label: "Dashboard" },
-  { id: "profiles" as const, label: "Profiles" },
+  { id: "dashboard" as const, label: "Tableau de bord" },
+  { id: "profiles" as const, label: "Profils" },
   { id: "proxies" as const, label: "Proxies" },
   { id: "sessions" as const, label: "Sessions" },
 ];

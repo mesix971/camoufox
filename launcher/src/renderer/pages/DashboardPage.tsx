@@ -27,45 +27,45 @@ export function DashboardPage() {
   if (error) {
     return (
       <div className="p-8 text-red-300">
-        <p>failed to load dashboard: {error}</p>
+        <p>échec du chargement du tableau de bord : {error}</p>
       </div>
     );
   }
 
   if (!summary) {
-    return <div className="p-8 text-surface-100/50">loading...</div>;
+    return <div className="p-8 text-surface-100/50">chargement...</div>;
   }
 
   return (
     <div className="h-full overflow-y-auto p-6 space-y-6">
       <div className="grid grid-cols-3 gap-4">
         <Stat
-          title="Profiles"
+          title="Profils"
           big={summary.profiles.total}
-          sub={`${summary.profiles.bound_to_proxy} bound to a proxy`}
+          sub={`${summary.profiles.bound_to_proxy} liés à un proxy`}
           onClick={() => setTab("profiles")}
         />
         <Stat
           title="Proxies"
           big={summary.proxies.total}
           sub={Object.entries(summary.proxies.by_status)
-            .map(([k, v]) => `${v} ${k}`).join(" • ") || "none"}
+            .map(([k, v]) => `${v} ${k}`).join(" • ") || "aucun"}
           onClick={() => setTab("proxies")}
         />
         <Stat
-          title="Sessions running"
+          title="Sessions en cours"
           big={summary.sessions.running}
-          sub={`${summary.sessions.total} total (all time)`}
+          sub={`${summary.sessions.total} total (depuis toujours)`}
           onClick={() => setTab("sessions")}
           accent
         />
       </div>
 
       <div className="grid grid-cols-2 gap-4">
-        <Panel title="Profiles by OS">
+        <Panel title="Profils par OS">
           <BarList entries={summary.profiles.by_os} />
         </Panel>
-        <Panel title="Proxy health">
+        <Panel title="État des proxies">
           <div className="space-y-2">
             {Object.entries(summary.proxies.by_status).map(([status, count]) => (
               <div key={status} className="flex items-center justify-between">
@@ -74,11 +74,11 @@ export function DashboardPage() {
               </div>
             ))}
             {Object.keys(summary.proxies.by_status).length === 0 && (
-              <div className="text-surface-100/40 text-sm">no proxies</div>
+              <div className="text-surface-100/40 text-sm">aucun proxy</div>
             )}
           </div>
         </Panel>
-        <Panel title="Sessions by status">
+        <Panel title="Sessions par statut">
           <div className="space-y-2">
             {Object.entries(summary.sessions.by_status).map(([status, count]) => (
               <div key={status} className="flex items-center justify-between">
@@ -87,20 +87,20 @@ export function DashboardPage() {
               </div>
             ))}
             {Object.keys(summary.sessions.by_status).length === 0 && (
-              <div className="text-surface-100/40 text-sm">no sessions yet</div>
+              <div className="text-surface-100/40 text-sm">aucune session pour le moment</div>
             )}
           </div>
         </Panel>
-        <Panel title="Quick actions">
+        <Panel title="Actions rapides">
           <div className="flex flex-col gap-2">
             <button type="button" className="btn-primary w-fit" onClick={() => setTab("sessions")}>
-              Launch a session
+              Lancer une session
             </button>
             <button type="button" className="btn-ghost w-fit" onClick={() => setTab("profiles")}>
-              Manage profiles
+              Gérer les profils
             </button>
             <button type="button" className="btn-ghost w-fit" onClick={() => setTab("proxies")}>
-              Manage proxies
+              Gérer les proxies
             </button>
           </div>
         </Panel>
@@ -142,7 +142,7 @@ function Panel({ title, children }: { title: string; children: React.ReactNode }
 function BarList({ entries }: { entries: Record<string, number> }) {
   const pairs = Object.entries(entries).sort((a, b) => b[1] - a[1]);
   const max = Math.max(1, ...pairs.map(([, v]) => v));
-  if (pairs.length === 0) return <div className="text-surface-100/40 text-sm">no data</div>;
+  if (pairs.length === 0) return <div className="text-surface-100/40 text-sm">aucune donnée</div>;
   return (
     <div className="space-y-2">
       {pairs.map(([k, v]) => (

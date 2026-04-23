@@ -40,9 +40,9 @@ export function SessionsPage() {
     const tick = async () => {
       try {
         const res = await api().sessionLog(logFor) as { log: string };
-        if (!cancelled) setLogText(res.log || "(empty)");
+        if (!cancelled) setLogText(res.log || "(vide)");
       } catch (e) {
-        if (!cancelled) setLogText(`error: ${(e as Error).message}`);
+        if (!cancelled) setLogText(`erreur : ${(e as Error).message}`);
       }
     };
     tick();
@@ -54,7 +54,7 @@ export function SessionsPage() {
     try {
       await api().killSession(id);
       await refreshSessions();
-      showToast("success", "Session killed");
+      showToast("success", "Session arrêtée");
     } catch (e) {
       showToast("error", (e as Error).message);
     }
@@ -64,7 +64,7 @@ export function SessionsPage() {
     try {
       const res = await api().pruneSessions() as { pruned: number };
       await refreshSessions();
-      showToast("success", `${res.pruned} stopped sessions cleared`);
+      showToast("success", `${res.pruned} sessions arrêtées purgées`);
     } catch (e) {
       showToast("error", (e as Error).message);
     }
@@ -78,19 +78,19 @@ export function SessionsPage() {
         <div className="flex items-center gap-3">
           <h2 className="text-lg font-semibold">Sessions</h2>
           <span className="text-xs text-surface-100/60">
-            {runningCount} running / {sessions.length} total
+            {runningCount} actives / {sessions.length} total
           </span>
         </div>
         <div className="flex items-center gap-2">
-          <button type="button" className="btn-ghost" onClick={prune}>Prune stopped</button>
+          <button type="button" className="btn-ghost" onClick={prune}>Purger arrêtées</button>
           <button type="button" className="btn-ghost" onClick={() => refreshSessions()} disabled={sessionsLoading}>
-            Refresh
+            Rafraîchir
           </button>
           <button type="button" className="btn-ghost" onClick={() => setShowBatch(true)}>
-            + Batch
+            + Lot
           </button>
           <button type="button" className="btn-primary" onClick={() => setShowLaunch(true)}>
-            + Launch
+            + Lancer
           </button>
         </div>
       </div>
@@ -104,19 +104,19 @@ export function SessionsPage() {
       <div className="flex-1 overflow-y-auto">
         {sessions.length === 0 && !sessionsLoading && (
           <div className="p-8 text-center text-surface-100/50">
-            No sessions. Click <b>+ Launch</b> to start one.
+            Aucune session. Cliquez sur <b>+ Lancer</b> pour en démarrer une.
           </div>
         )}
         <table className="w-full text-sm">
           <thead className="text-xs uppercase text-surface-100/50 bg-surface-800/60 sticky top-0">
             <tr>
-              <th className="text-left px-4 py-2 font-medium">Status</th>
+              <th className="text-left px-4 py-2 font-medium">Statut</th>
               <th className="text-left px-4 py-2 font-medium">ID</th>
               <th className="text-left px-4 py-2 font-medium">PID</th>
-              <th className="text-left px-4 py-2 font-medium">Profile</th>
+              <th className="text-left px-4 py-2 font-medium">Profil</th>
               <th className="text-left px-4 py-2 font-medium">Proxy</th>
               <th className="text-left px-4 py-2 font-medium">URL</th>
-              <th className="text-left px-4 py-2 font-medium">Started</th>
+              <th className="text-left px-4 py-2 font-medium">Démarrée</th>
               <th className="text-right px-4 py-2 font-medium">Actions</th>
             </tr>
           </thead>

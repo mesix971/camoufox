@@ -34,7 +34,7 @@ export function NewProfileModal({ open, onClose }: Props) {
       if (tags) args.tags = tags.split(",").map((t) => t.trim()).filter(Boolean);
       await api().newProfile(args);
       await refreshProfiles();
-      showToast("success", "Profile created");
+      showToast("success", "Profil créé");
       onClose();
     } catch (e) {
       showToast("error", (e as Error).message);
@@ -47,30 +47,30 @@ export function NewProfileModal({ open, onClose }: Props) {
     <Modal
       open={open}
       onClose={onClose}
-      title="New profile"
+      title="Nouveau profil"
       footer={
         <>
-          <button type="button" className="btn-ghost" onClick={onClose}>Cancel</button>
+          <button type="button" className="btn-ghost" onClick={onClose}>Annuler</button>
           <button type="button" className="btn-primary" onClick={submit} disabled={submitting}>
-            {submitting ? "Generating..." : "Generate"}
+            {submitting ? "Génération..." : "Générer"}
           </button>
         </>
       }
     >
       <div className="space-y-3">
         <div>
-          <label className="block text-xs text-surface-100/60 mb-1">Archetype</label>
+          <label className="block text-xs text-surface-100/60 mb-1">Archétype</label>
           <select className="input" value={archetypeId} onChange={(e) => setArchetypeId(e.target.value)}>
-            <option value="">(any — filter by OS below)</option>
+            <option value="">(aucun — filtrer par OS ci-dessous)</option>
             {archetypes.map((a) => (
               <option key={a.id} value={a.id}>{a.id}</option>
             ))}
           </select>
         </div>
         <div>
-          <label className="block text-xs text-surface-100/60 mb-1">OS (only if no archetype)</label>
+          <label className="block text-xs text-surface-100/60 mb-1">OS (uniquement si aucun archétype)</label>
           <select className="input" value={os} onChange={(e) => setOs(e.target.value)} disabled={!!archetypeId}>
-            <option value="">(random, weighted)</option>
+            <option value="">(aléatoire, pondéré)</option>
             <option value="windows">windows</option>
             <option value="macos">macos</option>
             <option value="linux">linux</option>
@@ -78,16 +78,16 @@ export function NewProfileModal({ open, onClose }: Props) {
         </div>
         <div>
           <label className="block text-xs text-surface-100/60 mb-1">Locale</label>
-          <input className="input" placeholder="e.g. fr-FR (leave blank for weighted random)"
+          <input className="input" placeholder="ex. fr-FR (laisser vide pour un aléatoire pondéré)"
                  value={locale} onChange={(e) => setLocale(e.target.value)} />
         </div>
         <div>
-          <label className="block text-xs text-surface-100/60 mb-1">Name (optional)</label>
+          <label className="block text-xs text-surface-100/60 mb-1">Nom (optionnel)</label>
           <input className="input" value={name} onChange={(e) => setName(e.target.value)} />
         </div>
         <div>
-          <label className="block text-xs text-surface-100/60 mb-1">Tags (comma-separated)</label>
-          <input className="input" placeholder="e.g. adonis,btc,eu"
+          <label className="block text-xs text-surface-100/60 mb-1">Tags (séparés par des virgules)</label>
+          <input className="input" placeholder="ex. adonis,btc,eu"
                  value={tags} onChange={(e) => setTags(e.target.value)} />
         </div>
       </div>
