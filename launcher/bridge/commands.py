@@ -547,6 +547,41 @@ def ratelimit_set(args: Dict[str, Any]) -> Dict[str, Any]:
     return {"ok": True, "host": args["host"], "max_per_minute": int(args["max_per_minute"])}
 
 
+# --- creepjs scoring ---
+
+def score_profile_creepjs(args: Dict[str, Any]) -> Dict[str, Any]:
+    """Launch a short-lived Camoufox session to score a profile on creepjs.com.
+
+    Runs in-process (not via session_runner) since we need to use the scored
+    page synchronously and close it; don't pollute the sessions list.
+    """
+    import creepjsscore
+    from dataclasses import asdict as _asdict
+    profile_id = args["profile_id"]
+    profile = _profile_store().load(profile_id)
+    try:
+        from camoufox.sync_api import Camoufox
+    except ImportError as e:
+        raise RuntimeError(f"camoufox not importable: {e}")
+    config = fpgen.to_camoufox_config(profile)
+    scorer = creepjsscore.Scorer(
+        pass_fp_threshold=float(args.get("pass_fp_threshold", 75.0)),
+        pass_trust_threshold=float(args.get("pass_trust_threshold", 70.0)),
+    )
+    with Camoufox(config=config, headless=bool(args.get("headless", True))) as browser:
+        page = browser.new_page()
+        result = scorer.score(page, profile_id)
+    score_dict = _asdict(result)
+    # Attach to profile metadata if accepted.
+    if args.get("save_to_profile") and result.passed:
+        if not profile.tags:
+            profile.tags = []
+        if "creepjs-passed" not in profile.tags:
+            profile.tags.append("creepjs-passed")
+        _profile_store().save(profile)
+    return {"score": score_dict}
+
+
 # --- task queue ---
 
 def _task_queue():
@@ -636,4 +671,6 @@ COMMANDS = {
     "enqueue-task": enqueue_task,
     "list-tasks": list_tasks,
     "delete-task": delete_task,
+
+    "score-profile-creepjs": score_profile_creepjs,
 }
