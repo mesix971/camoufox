@@ -1,6 +1,6 @@
 {
   "name": "camoufox-launcher",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Electron launcher for Camoufox — wraps fpgen, proxypool, and session management behind a UI.",
   "private": true,
   "homepage": "https://github.com/mesix971/camoufox",
