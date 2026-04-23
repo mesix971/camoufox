@@ -125,7 +125,7 @@ def add_proxy(args: Dict[str, Any]) -> Dict[str, Any]:
     p = proxypool.parse(line, label=label, tags=tags)
     store = _proxy_store()
     if not args.get("allow_duplicate"):
-        existing = store.find_by_host_port(p.host, p.port)
+        existing = store.find_by_signature(p.host, p.port, p.username, p.password)
         if existing:
             return {"proxy": asdict(existing), "duplicate": True}
     store.save(p)
@@ -141,7 +141,7 @@ def import_proxies(args: Dict[str, Any]) -> Dict[str, Any]:
         if args.get("tag"):
             p.tags = list({*p.tags, *args["tag"].split(",")})
         if not args.get("allow_duplicate"):
-            if store.find_by_host_port(p.host, p.port):
+            if store.find_by_signature(p.host, p.port, p.username, p.password):
                 duplicates += 1
                 continue
         store.save(p)

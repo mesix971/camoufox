@@ -172,3 +172,20 @@ class ProxyStore:
             if entry.get("host") == host and entry.get("port") == port:
                 return self.load(entry["id"])
         return None
+
+    def find_by_signature(
+        self, host: str, port: int, username: Optional[str], password: Optional[str]
+    ) -> Optional[Proxy]:
+        """Stricter dedup — match on full auth tuple.
+
+        Needed for rotating providers like iproyal where the same host:port is
+        reused with different session IDs embedded in the username; those are
+        genuinely different proxy sessions and must not be treated as dupes.
+        """
+        for entry in self.list():
+            if entry.get("host") != host or entry.get("port") != port:
+                continue
+            p = self.load(entry["id"])
+            if p.username == username and p.password == password:
+                return p
+        return None
