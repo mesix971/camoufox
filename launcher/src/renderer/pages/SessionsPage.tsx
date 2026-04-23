@@ -141,7 +141,7 @@ export function SessionsPage() {
                     </button>
                     {(s.status === "running" || s.status === "starting") && (
                       <button type="button" className="btn-danger !py-1 !text-xs" onClick={() => kill(s.id)}>
-                        Kill
+                        Arrêter
                       </button>
                     )}
                   </div>
@@ -158,7 +158,7 @@ export function SessionsPage() {
       <Modal
         open={logFor !== null}
         onClose={() => { setLogFor(null); setLogText(""); }}
-        title={`Session logs — ${logFor?.slice(0, 12) || ""}`}
+        title={`Logs de session — ${logFor?.slice(0, 12) || ""}`}
         width="max-w-4xl"
       >
         <pre className="bg-surface-900 border border-surface-700 rounded p-3 text-xs font-mono overflow-auto max-h-[60vh] whitespace-pre-wrap">

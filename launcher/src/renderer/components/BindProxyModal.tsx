@@ -32,7 +32,7 @@ export function BindProxyModal({ open, onClose, profile }: Props) {
         proxy_id: proxyId || null,
       });
       await refreshProfiles();
-      showToast("success", proxyId ? "Proxy bound" : "Proxy unbound");
+      showToast("success", proxyId ? "Proxy lié" : "Proxy délié");
       onClose();
     } catch (e) {
       showToast("error", (e as Error).message);
@@ -52,27 +52,27 @@ export function BindProxyModal({ open, onClose, profile }: Props) {
     <Modal
       open={open && profile !== null}
       onClose={onClose}
-      title={profile ? `Bind proxy — ${profile.name}` : "Bind proxy"}
+      title={profile ? `Lier un proxy — ${profile.name}` : "Lier un proxy"}
       footer={
         <>
-          <button type="button" className="btn-ghost" onClick={onClose}>Cancel</button>
+          <button type="button" className="btn-ghost" onClick={onClose}>Annuler</button>
           <button type="button" className="btn-primary" onClick={submit} disabled={submitting}>
-            {submitting ? "Saving..." : (proxyId ? "Bind" : "Unbind")}
+            {submitting ? "Enregistrement..." : (proxyId ? "Lier" : "Délier")}
           </button>
         </>
       }
     >
       <div className="space-y-3">
         <div className="flex items-center gap-2">
-          <label className="text-xs text-surface-100/60">Filter:</label>
+          <label className="text-xs text-surface-100/60">Filtre :</label>
           <select
             className="input !w-auto !py-1 !text-xs"
             value={filter}
             onChange={(e) => setFilter(e.target.value as typeof filter)}
           >
-            <option value="all">all (excl. dead)</option>
-            <option value="active">active only</option>
-            <option value="untested">untested only</option>
+            <option value="all">tous (sauf morts)</option>
+            <option value="active">actifs uniquement</option>
+            <option value="untested">non testés uniquement</option>
           </select>
         </div>
 
@@ -84,7 +84,7 @@ export function BindProxyModal({ open, onClose, profile }: Props) {
             onChange={(e) => setProxyId(e.target.value)}
             size={Math.min(10, visibleProxies.length + 1)}
           >
-            <option value="">— unbind —</option>
+            <option value="">— délier —</option>
             {visibleProxies.map((p) => (
               <option key={p.id} value={p.id}>
                 [{p.status}] {p.label} — {p.provider} {p.observed_country || p.country || ""}
@@ -93,15 +93,15 @@ export function BindProxyModal({ open, onClose, profile }: Props) {
             ))}
           </select>
           <p className="text-xs text-surface-100/40 mt-1">
-            {visibleProxies.length} proxies shown. Dead proxies are hidden.
+            {visibleProxies.length} proxies affichés. Les proxies morts sont masqués.
           </p>
         </div>
 
         {profile?.locale && (
           <div className="text-xs text-surface-100/60">
-            Profile locale: <b>{profile.locale}</b>. Picking a proxy from a
-            country that doesn't match this locale is a fingerprint
-            inconsistency.
+            Locale du profil : <b>{profile.locale}</b>. Choisir un proxy depuis
+            un pays qui ne correspond pas à cette locale constitue une incohérence
+            d'empreinte.
           </div>
         )}
       </div>

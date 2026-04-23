@@ -56,11 +56,11 @@ export function BatchLaunchModal({ open, onClose }: Props) {
 
   const submit = async () => {
     if (selected.size === 0) {
-      showToast("error", "pick at least one profile");
+      showToast("error", "choisir au moins un profil");
       return;
     }
     if (strategy === "fixed" && !fixedProxyId) {
-      showToast("error", "fixed strategy needs a proxy");
+      showToast("error", "la stratégie fixe nécessite un proxy");
       return;
     }
     setSubmitting(true);
@@ -80,7 +80,7 @@ export function BatchLaunchModal({ open, onClose }: Props) {
       await refreshSessions();
       showToast(
         res.failures.length ? "info" : "success",
-        `launched ${res.count}/${selected.size}`,
+        `lancées ${res.count}/${selected.size}`,
       );
     } catch (e) {
       showToast("error", (e as Error).message);
@@ -93,12 +93,12 @@ export function BatchLaunchModal({ open, onClose }: Props) {
     <Modal
       open={open}
       onClose={onClose}
-      title="Batch launch"
+      title="Lancement en lot"
       width="max-w-3xl"
       footer={
         <>
           <button type="button" className="btn-ghost" onClick={onClose}>
-            {result ? "Done" : "Cancel"}
+            {result ? "Terminé" : "Annuler"}
           </button>
           <button
             type="button"
@@ -106,7 +106,7 @@ export function BatchLaunchModal({ open, onClose }: Props) {
             onClick={submit}
             disabled={submitting || selected.size === 0}
           >
-            {submitting ? "Launching..." : `Launch ${selected.size}`}
+            {submitting ? "Lancement..." : `Lancer ${selected.size}`}
           </button>
         </>
       }
@@ -114,25 +114,25 @@ export function BatchLaunchModal({ open, onClose }: Props) {
       <div className="space-y-3">
         <div className="flex items-center gap-2">
           <select className="input !w-auto !py-1" value={osFilter} onChange={(e) => setOsFilter(e.target.value)}>
-            <option value="">any OS</option>
+            <option value="">tout OS</option>
             <option value="windows">windows</option>
             <option value="macos">macos</option>
             <option value="linux">linux</option>
           </select>
           <input
             className="input !w-auto !py-1"
-            placeholder="tag filter"
+            placeholder="filtre par tag"
             value={tagFilter}
             onChange={(e) => setTagFilter(e.target.value)}
           />
           <button type="button" className="btn-ghost !py-1 !text-xs" onClick={selectAllVisible}>
-            Select all visible
+            Tout sélectionner
           </button>
           <button type="button" className="btn-ghost !py-1 !text-xs" onClick={clearAll}>
-            Clear
+            Effacer
           </button>
           <span className="text-xs text-surface-100/60">
-            {selected.size} / {visibleProfiles.length} selected
+            {selected.size} / {visibleProfiles.length} sélectionnés
           </span>
         </div>
 
@@ -154,7 +154,7 @@ export function BatchLaunchModal({ open, onClose }: Props) {
                   <td className="px-2 py-1">{p.os}</td>
                   <td className="px-2 py-1">{p.locale}</td>
                   <td className="px-2 py-1 text-surface-100/60">
-                    {p.proxy_id ? "bound" : "—"}
+                    {p.proxy_id ? "lié" : "—"}
                   </td>
                 </tr>
               ))}
@@ -164,23 +164,23 @@ export function BatchLaunchModal({ open, onClose }: Props) {
 
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="block text-xs text-surface-100/60 mb-1">Proxy strategy</label>
+            <label className="block text-xs text-surface-100/60 mb-1">Stratégie de proxy</label>
             <select
               className="input"
               value={strategy}
               onChange={(e) => setStrategy(e.target.value as ProxyStrategy)}
             >
-              <option value="bound">bound (use each profile's proxy_id)</option>
-              <option value="round-robin">round-robin across pool</option>
-              <option value="fixed">fixed (same proxy for all)</option>
-              <option value="none">no proxy</option>
+              <option value="bound">lié (utiliser le proxy_id de chaque profil)</option>
+              <option value="round-robin">tourniquet sur le pool</option>
+              <option value="fixed">fixe (même proxy pour tous)</option>
+              <option value="none">aucun proxy</option>
             </select>
           </div>
           {strategy === "fixed" && (
             <div>
-              <label className="block text-xs text-surface-100/60 mb-1">Fixed proxy</label>
+              <label className="block text-xs text-surface-100/60 mb-1">Proxy fixe</label>
               <select className="input" value={fixedProxyId} onChange={(e) => setFixedProxyId(e.target.value)}>
-                <option value="">— select —</option>
+                <option value="">— sélectionner —</option>
                 {proxies.filter((p) => p.status !== "dead").map((p) => (
                   <option key={p.id} value={p.id}>{p.label} [{p.status}]</option>
                 ))}
@@ -189,30 +189,30 @@ export function BatchLaunchModal({ open, onClose }: Props) {
           )}
           {strategy === "round-robin" && (
             <div>
-              <label className="block text-xs text-surface-100/60 mb-1">Country filter (optional)</label>
-              <input className="input" placeholder="e.g. US" value={countryFilter}
+              <label className="block text-xs text-surface-100/60 mb-1">Filtre par pays (optionnel)</label>
+              <input className="input" placeholder="ex. US" value={countryFilter}
                      onChange={(e) => setCountryFilter(e.target.value)} />
             </div>
           )}
           <div className="col-span-2">
-            <label className="block text-xs text-surface-100/60 mb-1">Initial URL (optional, applied to all)</label>
+            <label className="block text-xs text-surface-100/60 mb-1">URL initiale (optionnelle, appliquée à toutes)</label>
             <input className="input" placeholder="https://example.com" value={url}
                    onChange={(e) => setUrl(e.target.value)} />
           </div>
           <label className="flex items-center gap-2 text-sm col-span-2">
             <input type="checkbox" checked={headless} onChange={(e) => setHeadless(e.target.checked)} />
-            Headless
+            Headless (sans interface)
           </label>
         </div>
 
         {result && (
           <div className="mt-2 p-3 bg-surface-900 border border-surface-700 rounded text-xs">
-            <div>launched: <b className="text-green-400">{result.count}</b></div>
-            <div>failures: <b className="text-red-400">{result.failures.length}</b></div>
+            <div>lancées : <b className="text-green-400">{result.count}</b></div>
+            <div>échecs : <b className="text-red-400">{result.failures.length}</b></div>
             {result.failures.length > 0 && (
               <ul className="mt-2 space-y-0.5 text-red-300/80 max-h-28 overflow-y-auto">
                 {result.failures.map((f, i) => (
-                  <li key={i}><code>{f.profile_id}</code>: {f.error}</li>
+                  <li key={i}><code>{f.profile_id}</code> : {f.error}</li>
                 ))}
               </ul>
             )}

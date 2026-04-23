@@ -20,7 +20,7 @@ export function ImportProxiesModal({ open, onClose }: Props) {
 
   const submit = async () => {
     if (!text.trim()) {
-      showToast("error", "paste some proxy lines first");
+      showToast("error", "collez d'abord des lignes de proxy");
       return;
     }
     setSubmitting(true);
@@ -33,7 +33,7 @@ export function ImportProxiesModal({ open, onClose }: Props) {
       await refreshProxies();
       showToast(
         res.errors.length ? "info" : "success",
-        `${res.saved} saved, ${res.duplicates} duplicates, ${res.errors.length} errors`,
+        `${res.saved} enregistrés, ${res.duplicates} doublons, ${res.errors.length} erreurs`,
       );
     } catch (e) {
       showToast("error", (e as Error).message);
@@ -53,30 +53,30 @@ export function ImportProxiesModal({ open, onClose }: Props) {
     <Modal
       open={open}
       onClose={close}
-      title="Import proxies"
+      title="Importer des proxies"
       width="max-w-2xl"
       footer={
         <>
           <button type="button" className="btn-ghost" onClick={close}>
-            {result ? "Done" : "Cancel"}
+            {result ? "Terminé" : "Annuler"}
           </button>
           <button type="button" className="btn-primary" onClick={submit} disabled={submitting}>
-            {submitting ? "Importing..." : "Import"}
+            {submitting ? "Importation..." : "Importer"}
           </button>
         </>
       }
     >
       <div className="space-y-3">
         <p className="text-xs text-surface-100/70">
-          Paste one proxy per line. Supported formats: URL (http://user:pass@host:port,
-          socks5://...), flat (host:port:user:pass), @-form (user:pass@host:port),
-          or no auth (host:port). iproyal / brightdata / smartproxy metadata is
-          auto-extracted from the auth payload.
+          Collez un proxy par ligne. Formats supportés : URL (http://user:pass@host:port,
+          socks5://...), à plat (host:port:user:pass), forme @ (user:pass@host:port),
+          ou sans authentification (host:port). Les métadonnées iproyal / brightdata / smartproxy
+          sont extraites automatiquement depuis la charge d'authentification.
         </p>
         <textarea
           className="input font-mono text-xs"
           rows={12}
-          placeholder="# any of:
+          placeholder="# n'importe lequel :
 http://u:p@198.51.100.1:8080
 geo.iproyal.com:12321:user:pw_country-US_session-abc_lifetime-10m
 host:port:user:pass"
@@ -84,22 +84,22 @@ host:port:user:pass"
           onChange={(e) => setText(e.target.value)}
         />
         <div>
-          <label className="block text-xs text-surface-100/60 mb-1">Attach tag to all (optional)</label>
-          <input className="input" placeholder="e.g. iproyal_us"
+          <label className="block text-xs text-surface-100/60 mb-1">Attacher un tag à tous (optionnel)</label>
+          <input className="input" placeholder="ex. iproyal_us"
                  value={tag} onChange={(e) => setTag(e.target.value)} />
         </div>
         {result && (
           <div className="mt-2 p-3 bg-surface-900 border border-surface-700 rounded text-xs font-mono">
-            <div>parsed: <b>{result.parsed}</b></div>
-            <div>saved: <b className="text-green-400">{result.saved}</b></div>
-            <div>duplicates: <b className="text-amber-400">{result.duplicates}</b></div>
-            <div>errors: <b className="text-red-400">{result.errors.length}</b></div>
+            <div>analysés : <b>{result.parsed}</b></div>
+            <div>enregistrés : <b className="text-green-400">{result.saved}</b></div>
+            <div>doublons : <b className="text-amber-400">{result.duplicates}</b></div>
+            <div>erreurs : <b className="text-red-400">{result.errors.length}</b></div>
             {result.errors.length > 0 && (
               <ul className="mt-2 space-y-0.5 text-red-300/80 max-h-40 overflow-y-auto">
                 {result.errors.slice(0, 15).map((e, i) => (
-                  <li key={i}>line {e.line}: {e.error} — <code>{e.raw}</code></li>
+                  <li key={i}>ligne {e.line} : {e.error} — <code>{e.raw}</code></li>
                 ))}
-                {result.errors.length > 15 && <li>... ({result.errors.length - 15} more)</li>}
+                {result.errors.length > 15 && <li>... ({result.errors.length - 15} de plus)</li>}
               </ul>
             )}
           </div>
