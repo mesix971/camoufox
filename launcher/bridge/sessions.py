@@ -182,6 +182,11 @@ class SessionManager:
         proxy_id: Optional[str] = None,
         url: Optional[str] = None,
         headless: bool = False,
+        warmup: bool = False,
+        auto_refresh: float = 0.0,
+        persistent: bool = False,
+        queue_monitor: bool = False,
+        rate_limit: int = 0,
         runner_argv_extra: Optional[List[str]] = None,
     ) -> Session:
         """Start a detached session_runner subprocess. Returns the persisted Session."""
@@ -200,6 +205,16 @@ class SessionManager:
             argv += ["--url", url]
         if headless:
             argv += ["--headless"]
+        if warmup:
+            argv += ["--warmup"]
+        if auto_refresh > 0:
+            argv += ["--auto-refresh", str(auto_refresh)]
+        if persistent:
+            argv += ["--persistent"]
+        if queue_monitor:
+            argv += ["--queue-monitor"]
+        if rate_limit > 0:
+            argv += ["--rate-limit", str(rate_limit)]
         if runner_argv_extra:
             argv += list(runner_argv_extra)
 

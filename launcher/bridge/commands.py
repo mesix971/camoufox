@@ -13,9 +13,13 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any, Dict
 
+import json
+
 import fpgen
 import proxypool
 
+from launcher.bridge import webhook as webhook_mod
+from launcher.bridge.ratelimit import RateLimiter
 from launcher.bridge.sessions import SessionManager
 
 
@@ -83,6 +87,77 @@ def new_profile(args: Dict[str, Any]) -> Dict[str, Any]:
 def delete_profile(args: Dict[str, Any]) -> Dict[str, Any]:
     _profile_store().delete(args["id"])
     return {"deleted": args["id"]}
+
+
+def clone_profile(args: Dict[str, Any]) -> Dict[str, Any]:
+    """Duplicate a profile, optionally overriding a few fields.
+
+    args: id (required), name (optional new name), reseed (bool, re-roll random
+    sub-fields like tls session_id), tags (list of extra tags).
+    """
+    from dataclasses import asdict as _asdict
+    import uuid
+    store = _profile_store()
+    src = store.load(args["id"])
+    data = _asdict(src)
+    data["id"] = uuid.uuid4().hex[:12]
+    data["name"] = args.get("name") or f"{src.name}-clone"
+    from datetime import datetime, timezone
+    data["created_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    data["last_used_at"] = None
+    data["use_count"] = 0
+    if args.get("tags"):
+        extras = args["tags"] if isinstance(args["tags"], list) else [args["tags"]]
+        data["tags"] = list({*(data.get("tags") or []), *extras})
+    cloned = fpgen.Profile.from_json(json.dumps(data))
+    store.save(cloned)
+    return {"profile": _profile_to_dict(cloned)}
+
+
+def update_profile(args: Dict[str, Any]) -> Dict[str, Any]:
+    """Patch a profile with a dict of field updates. Only allows fields that
+    exist on Profile; unknown keys raise KeyError.
+    """
+    from dataclasses import fields as _fields
+    store = _profile_store()
+    p = store.load(args["id"])
+    allowed = {f.name for f in _fields(fpgen.Profile)} - {"id", "created_at"}
+    updates = args.get("updates") or {}
+    if not isinstance(updates, dict):
+        raise ValueError("updates must be an object")
+    for k, v in updates.items():
+        if k not in allowed:
+            raise KeyError(f"cannot update field: {k}")
+        setattr(p, k, v)
+    store.save(p)
+    return {"profile": _profile_to_dict(p)}
+
+
+def export_profile(args: Dict[str, Any]) -> Dict[str, Any]:
+    """Return the full profile as JSON — user pipes/copies to disk."""
+    from dataclasses import asdict as _asdict
+    p = _profile_store().load(args["id"])
+    return {"profile": _asdict(p), "export_version": 1}
+
+
+def import_profile(args: Dict[str, Any]) -> Dict[str, Any]:
+    """Import a profile from a JSON dict (as produced by export-profile).
+
+    args: profile (required, dict), rename (bool: generate a fresh id+name to
+    avoid clashing with the source).
+    """
+    import uuid
+    data = args["profile"]
+    if not isinstance(data, dict):
+        raise ValueError("profile must be an object")
+    if args.get("rename", True):
+        data = dict(data)
+        data["id"] = uuid.uuid4().hex[:12]
+        if "name" in data:
+            data["name"] = f"{data['name']}-imported"
+    p = fpgen.Profile.from_json(json.dumps(data))
+    _profile_store().save(p)
+    return {"profile": _profile_to_dict(p)}
 
 
 def list_archetypes(args: Dict[str, Any]) -> Dict[str, Any]:
@@ -234,6 +309,11 @@ def launch_session(args: Dict[str, Any]) -> Dict[str, Any]:
         proxy_id=args.get("proxy_id"),
         url=args.get("url"),
         headless=bool(args.get("headless", False)),
+        warmup=bool(args.get("warmup", False)),
+        auto_refresh=float(args.get("auto_refresh", 0) or 0),
+        persistent=bool(args.get("persistent", False)),
+        queue_monitor=bool(args.get("queue_monitor", False)),
+        rate_limit=int(args.get("rate_limit", 0) or 0),
     )
     return {"session": mgr.as_dict(s)}
 
@@ -338,7 +418,17 @@ def batch_launch_session(args: Dict[str, Any]) -> Dict[str, Any]:
             proxy_id = args.get("proxy_id")
 
         try:
-            s = mgr.spawn(profile_id=pid, proxy_id=proxy_id, url=url, headless=headless)
+            s = mgr.spawn(
+                profile_id=pid,
+                proxy_id=proxy_id,
+                url=url,
+                headless=headless,
+                warmup=bool(args.get("warmup", False)),
+                auto_refresh=float(args.get("auto_refresh", 0) or 0),
+                persistent=bool(args.get("persistent", False)),
+                queue_monitor=bool(args.get("queue_monitor", False)),
+                rate_limit=int(args.get("rate_limit", 0) or 0),
+            )
             spawned.append(mgr.as_dict(s))
         except Exception as e:  # noqa: BLE001 — batch must not bail on one failure
             failures.append({"profile_id": pid, "error": f"{type(e).__name__}: {e}"})
@@ -390,6 +480,83 @@ def dashboard_summary(args: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+# --- webhook / settings ---
+
+def set_webhook(args: Dict[str, Any]) -> Dict[str, Any]:
+    url = args["url"]
+    if not url.startswith(("http://", "https://")):
+        raise ValueError("url must be http(s)://")
+    webhook_mod.set_webhook(url)
+    return {"ok": True}
+
+
+def get_webhook(args: Dict[str, Any]) -> Dict[str, Any]:
+    return {"url": webhook_mod.get_webhook()}
+
+
+def test_webhook(args: Dict[str, Any]) -> Dict[str, Any]:
+    ok = webhook_mod.notify(
+        args.get("content", "Camoufox webhook test — it works."),
+        level=args.get("level", "info"),
+    )
+    return {"delivered": ok}
+
+
+def ratelimit_stats(args: Dict[str, Any]) -> Dict[str, Any]:
+    path = os.environ.get(
+        "LAUNCHER_RATELIMIT",
+        str(Path.home() / ".camoufox" / "launcher" / "ratelimit.json"),
+    )
+    return {"hosts": RateLimiter(path).stats(args.get("host"))}
+
+
+def ratelimit_set(args: Dict[str, Any]) -> Dict[str, Any]:
+    path = os.environ.get(
+        "LAUNCHER_RATELIMIT",
+        str(Path.home() / ".camoufox" / "launcher" / "ratelimit.json"),
+    )
+    RateLimiter(path).set_limit(args["host"], int(args["max_per_minute"]))
+    return {"ok": True, "host": args["host"], "max_per_minute": int(args["max_per_minute"])}
+
+
+# --- task queue ---
+
+def _task_queue():
+    import taskqueue as tq
+    return tq.TaskQueue(
+        os.environ.get(
+            "TASKQUEUE_STORE",
+            str(Path.home() / ".camoufox" / "launcher" / "tasks"),
+        )
+    )
+
+
+def enqueue_task(args: Dict[str, Any]) -> Dict[str, Any]:
+    from datetime import datetime, timezone, timedelta
+    q = _task_queue()
+    action = args["action"]
+    if not isinstance(action, dict):
+        raise ValueError("action must be an object")
+    scheduled_at = None
+    if args.get("delay_seconds"):
+        scheduled_at = datetime.now(timezone.utc) + timedelta(seconds=float(args["delay_seconds"]))
+    elif args.get("run_at"):
+        scheduled_at = datetime.fromisoformat(args["run_at"])
+    task = q.enqueue(action=action, scheduled_at=scheduled_at, tags=args.get("tags") or [])
+    return {"task": asdict(task)}
+
+
+def list_tasks(args: Dict[str, Any]) -> Dict[str, Any]:
+    q = _task_queue()
+    items = [asdict(t) for t in q.list(status=args.get("status"), tag=args.get("tag"))]
+    return {"tasks": items, "stats": q.stats()}
+
+
+def delete_task(args: Dict[str, Any]) -> Dict[str, Any]:
+    _task_queue().delete(args["id"])
+    return {"deleted": args["id"]}
+
+
 # --- helpers ---
 
 def _profile_to_dict(p: fpgen.Profile) -> Dict[str, Any]:
@@ -404,6 +571,10 @@ COMMANDS = {
     "show-profile": show_profile,
     "new-profile": new_profile,
     "delete-profile": delete_profile,
+    "clone-profile": clone_profile,
+    "update-profile": update_profile,
+    "export-profile": export_profile,
+    "import-profile": import_profile,
     "list-archetypes": list_archetypes,
 
     "list-proxies": list_proxies,
@@ -426,4 +597,14 @@ COMMANDS = {
     "bind-profile-proxy": bind_profile_proxy,
 
     "dashboard-summary": dashboard_summary,
+
+    "set-webhook": set_webhook,
+    "get-webhook": get_webhook,
+    "test-webhook": test_webhook,
+    "ratelimit-stats": ratelimit_stats,
+    "ratelimit-set": ratelimit_set,
+
+    "enqueue-task": enqueue_task,
+    "list-tasks": list_tasks,
+    "delete-task": delete_task,
 }
