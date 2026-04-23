@@ -361,18 +361,29 @@ Normal — `python3.exe` sur Windows est un stub. Le launcher utilise `py -3` de
 - `_pid_alive` via ctypes (reliable status tracking)
 - Installeurs multi-OS (AppImage, deb, exe, dmg, zip)
 
-### 🔜 Partiellement implémenté — à finir côté UI
+### 🟢 UI complète
+- **CreepJS** : bouton "Tester CreepJS" sur chaque profil + badge coloré (vert ✓ passed / rouge ✗ failed) avec scores FP/Trust
+- **Humanlike** : checkbox "Humanlike (souris + frappe réaliste)" dans Options avancées
+- **Macros** : onglet dédié avec édition JSON, lancement (+ profil + URL), enregistrement via session, suppression
+- **Métriques live** : colonnes CPU % + RAM dans Sessions (rafraîchies toutes les 2 s), panel "Système" dans Dashboard (CPU + RAM totaux) rafraîchi toutes les 5 s, bannière ambre si psutil manquant
 
-- **CreepJS scoring** : backend + commande bridge `score-profile-creepjs` OK, mais le bouton "Tester CreepJS" n'est pas encore dans ProfilesPage.
-- **Humanlike** : flag `--humanlike` fonctionne, mais pas de checkbox dans LaunchSessionModal encore.
-- **Macros** : commandes `list-macros` / `save-macro` / etc. OK et `--run-macro NAME` / `--record-macro NAME` marchent, mais il manque un onglet "Macros" dans l'UI.
-- **Dashboard métriques live** : données dispo via `session-metrics`, mais le rendu (colonnes CPU/RAM) pas encore dans SessionsPage.
-- **Canvas/WebGL noise** : le patch est draft — il faut l'appliquer sur un arbre Firefox, fixer les numéros de ligne, et regénérer.
+### ⚠️ Partiellement — nécessite travail externe
 
-### 🔜 Pas encore commencé
+- **Canvas/WebGL pixel noise** : le patch `patches/canvas-webgl-pixel-noise.patch` est draft. Il faut l'appliquer sur un arbre Firefox 142, fixer les numéros de ligne qui auront fuzz, et regénérer via `git diff` pour produire une version finale. Sans accès au source Firefox dans cet environnement, les numéros de ligne restent approximatifs.
 
-- **Alertes intelligentes** — détection de patterns (session plante en boucle → freeze auto, rate limit répété → backoff exponentiel avec notification).
-- **Health check scheduler automatique** — daemon qui relance `check-proxies-all` toutes les 10 min et flag les dead/flagged sans intervention.
+### ✅ Scheduler daemon — fait
+
+Implémenté dans `launcher/bridge/scheduler.py` — lance avec :
+```bash
+python -m launcher.bridge.scheduler
+```
+
+3 jobs récurrents :
+- **`proxy_health_check`** (toutes les 10 min) : `check-proxies-all` + webhook si > 50 % du pool meurt
+- **`session_crash_watch`** (toutes les 60 s) : si un profil crashe 3+ fois en < 1 h → tag `frozen` + webhook
+- **`ratelimit_escalation`** (toutes les 60 s) : si un hôte est à > 90 % de son cap pendant 5 min → webhook
+
+État persistant dans `~/.camoufox/launcher/scheduler.json`. Tu peux le lancer en systemd service ou cron `@reboot` pour qu'il tourne en permanence.
 
 ---
 
