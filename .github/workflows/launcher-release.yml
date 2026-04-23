@@ -37,11 +37,17 @@ jobs:
           - os: windows-2022
             platform: win
             artifact_glob: "launcher/release/*.exe"
-          - os: macos-13
-            platform: mac
-            artifact_glob: "launcher/release/*.dmg,launcher/release/*.zip"
+          # macOS runners frequently queue 10+ minutes on private repos,
+          # blocking the release job. Re-enable once runner capacity is
+          # available (or move to macos-latest which tends to be faster).
+          # - os: macos-13
+          #   platform: mac
+          #   artifact_glob: "launcher/release/*.dmg,launcher/release/*.zip"
 
     runs-on: ${{ matrix.os }}
+    # Fail fast if a runner doesn't pick up within 20 min; prevents the
+    # release job from being gated indefinitely.
+    timeout-minutes: 20
     name: build-${{ matrix.platform }}
 
     steps:
