@@ -157,6 +157,13 @@ export const IPC = {
   enqueueTask: "enqueue-task",
   listTasks: "list-tasks",
   deleteTask: "delete-task",
+
+  scoreProfileCreepjs: "score-profile-creepjs",
+  listMacros: "list-macros",
+  showMacro: "show-macro",
+  saveMacro: "save-macro",
+  deleteMacro: "delete-macro",
+  sessionMetrics: "session-metrics",
 } as const;
 
 export interface DashboardSummary {
@@ -227,4 +234,55 @@ export interface LaunchOptions {
   persistent?: boolean;
   queue_monitor?: boolean;
   rate_limit?: number;
+  humanlike?: boolean;
+  run_macro?: string;
+}
+
+// --- CreepJS scoring ---
+export interface CreepJSScore {
+  fingerprint_score: number;
+  trust_score: number;
+  lies_count: number;
+  bot_signals: number;
+  has_webdriver: boolean;
+  consistent: boolean;
+  passed: boolean;
+  error?: string | null;
+  [k: string]: unknown;
+}
+
+// --- Macros ---
+export interface Macro {
+  name: string;
+  actions: unknown[];
+  metadata?: Record<string, unknown>;
+  action_count?: number;
+  [k: string]: unknown;
+}
+
+// --- Live metrics ---
+export interface SessionMetrics {
+  cpu_percent: number;
+  rss_bytes: number;
+  memory_percent?: number;
+  num_threads?: number;
+  [k: string]: unknown;
+}
+
+export interface SystemMetrics {
+  cpu_percent: number;
+  memory_percent: number;
+  memory_used_bytes?: number;
+  memory_total_bytes?: number;
+  [k: string]: unknown;
+}
+
+export interface SessionMetricsReport {
+  psutil_available: boolean;
+  system: SystemMetrics;
+  sessions: Array<Session & { metrics?: SessionMetrics | null }>;
+}
+
+export interface SessionWithMetrics extends Session {
+  metrics?: SessionMetrics | null;
 }
