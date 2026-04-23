@@ -141,22 +141,23 @@ def test_punctuation_has_extra_delay() -> None:
     def record_sleep(d: float) -> None:
         recorded.append(d)
 
-    # Replace the sleep inside typing.py specifically.
+    # Re-patch `humanlike.typing.time.sleep` on top of the autouse fixture.
+    # Note: we do NOT also patch cursor.time.sleep here — both module
+    # references resolve to the same `time` object, so adding an inner
+    # cursor patch would shadow our recorder.
     with patch("humanlike.typing.time.sleep", side_effect=record_sleep):
-        with patch("humanlike.cursor.time.sleep"):
-            type_text(
-                page,
-                "#inp",
-                "ab.",
-                wpm=250.0,
-                typo_rate=0.0,
-                rng=random.Random(42),
-            )
-    # The last delay corresponds to the "." character and should be larger
-    # than the prior (letter) delays on average. Just assert it's > 1.2x
-    # the average of the two preceding ones (guards against jitter noise).
-    # There's also a post-click settle sleep at the start, so filter those
-    # out — per-char delays are at indices -3, -2, -1 (one per char).
+        type_text(
+            page,
+            "#inp",
+            "ab.",
+            wpm=250.0,
+            typo_rate=0.0,
+            rng=random.Random(42),
+        )
+    # The last 3 recorded delays correspond to: letter 'a', letter 'b',
+    # punctuation '.'. There may also be a post-click settle sleep earlier
+    # in the list, so we slice the tail.
+    assert len(recorded) >= 3
     per_char = recorded[-3:]
     letters = per_char[:2]
     punct = per_char[2]
