@@ -29,6 +29,8 @@ export function BatchLaunchModal({ open, onClose }: Props) {
   const [osFilter, setOsFilter] = useState<string>("");
   const [tagFilter, setTagFilter] = useState<string>("");
   const [advanced, setAdvanced] = useState<LaunchOptions>({});
+  const [tile, setTile] = useState(false);
+  const [grid, setGrid] = useState<string>("auto");
 
   useEffect(() => {
     if (open) {
@@ -87,6 +89,10 @@ export function BatchLaunchModal({ open, onClose }: Props) {
       if (advanced.rate_limit) args.rate_limit = advanced.rate_limit;
       if (advanced.humanlike) args.humanlike = true;
       if (advanced.run_macro) args.run_macro = advanced.run_macro;
+      if (tile) {
+        args.tile = true;
+        if (grid && grid !== "auto") args.grid = grid;
+      }
       const res = await api().batchLaunchSession(args) as BatchLaunchResult;
       setResult(res);
       await refreshSessions();
@@ -215,6 +221,29 @@ export function BatchLaunchModal({ open, onClose }: Props) {
             <input type="checkbox" checked={headless} onChange={(e) => setHeadless(e.target.checked)} />
             Headless (sans interface)
           </label>
+          <label className="flex items-center gap-2 text-sm col-span-2">
+            <input type="checkbox" checked={tile} onChange={(e) => setTile(e.target.checked)} />
+            Disposer les fenêtres en grille sur l'écran
+          </label>
+          {tile && (
+            <div className="col-span-2 flex items-center gap-2 text-xs text-surface-100/70 pl-6">
+              <span>Grille :</span>
+              <select className="input !w-auto !py-1 !text-xs" value={grid}
+                      onChange={(e) => setGrid(e.target.value)}>
+                <option value="auto">auto (carré approx.)</option>
+                <option value="1x1">1×1 (1 fenêtre plein écran)</option>
+                <option value="2x1">2×1 (2 côte à côte)</option>
+                <option value="2x2">2×2 (4 fenêtres)</option>
+                <option value="3x2">3×2 (6 fenêtres)</option>
+                <option value="3x3">3×3 (9 fenêtres)</option>
+                <option value="4x3">4×3 (12 fenêtres)</option>
+                <option value="4x4">4×4 (16 fenêtres)</option>
+              </select>
+              <span className="text-surface-100/50">
+                {selected.size} {selected.size > 1 ? "fenêtres à placer" : "fenêtre à placer"}
+              </span>
+            </div>
+          )}
           <div className="col-span-2">
             <AdvancedLaunchOptions value={advanced} onChange={setAdvanced} />
           </div>

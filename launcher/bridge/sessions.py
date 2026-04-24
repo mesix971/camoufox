@@ -191,6 +191,7 @@ class SessionManager:
         humanlike: bool = False,
         run_macro: Optional[str] = None,
         record_macro: Optional[str] = None,
+        tile: Optional[tuple] = None,  # (x, y, w, h)
         runner_argv_extra: Optional[List[str]] = None,
     ) -> Session:
         """Start a detached session_runner subprocess. Returns the persisted Session."""
@@ -227,6 +228,8 @@ class SessionManager:
             argv += ["--run-macro", run_macro]
         if record_macro:
             argv += ["--record-macro", record_macro]
+        if tile and len(tile) == 4:
+            argv += ["--tile", ",".join(str(int(v)) for v in tile)]
         if runner_argv_extra:
             argv += list(runner_argv_extra)
 

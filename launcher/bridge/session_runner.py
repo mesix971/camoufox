@@ -178,6 +178,8 @@ def main(argv=None) -> int:
                     help="load and run an action-DSL script after landing on --url")
     ap.add_argument("--record-macro", metavar="NAME",
                     help="record user interactions into a named macro until the session ends")
+    ap.add_argument("--tile", metavar="X,Y,W,H",
+                    help="position the window at X,Y with width W height H after launch")
     args = ap.parse_args(argv)
 
     signal.signal(signal.SIGTERM, _handle_signal)
@@ -254,6 +256,9 @@ def main(argv=None) -> int:
             solver = _maybe_build_solver() if args.auto_solve_captcha else None
             if args.auto_solve_captcha and solver is None:
                 _log("auto-solve-captcha requested but no providers configured; skipping")
+
+            if args.tile:
+                _apply_tile(page, args.tile)
 
             if args.url:
                 _goto_with_retry(page, args.url, limiter)
@@ -432,6 +437,17 @@ def _run_macro(page, path_or_name: str, humanlike_mod) -> None:
         _log(f"macro finished: {ok}/{len(results)} actions ok")
     except Exception as e:  # noqa: BLE001
         _log(f"macro error: {type(e).__name__}: {e}")
+
+
+def _apply_tile(page, spec: str) -> None:
+    try:
+        x, y, w, h = [int(p) for p in spec.split(",")]
+    except ValueError:
+        _log(f"bad --tile spec: {spec!r}")
+        return
+    from launcher.bridge.window_place import place_window
+    ok = place_window(page, os.getpid(), x, y, w, h)
+    _log(f"tile ({x},{y},{w}x{h}) {'applied' if ok else 'failed (window stays default)'}")
 
 
 def _jitter(seconds: float, pct: float = 0.2) -> float:

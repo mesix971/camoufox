@@ -71,6 +71,8 @@ const api = {
     rate_limit?: number;
     humanlike?: boolean;
     run_macro?: string;
+    tile?: boolean;
+    grid?: string;  // 'auto' | 'CxR'
   }) => invoke(IPC.batchLaunchSession, args),
   sessionMetrics: () => invoke(IPC.sessionMetrics, {}),
 

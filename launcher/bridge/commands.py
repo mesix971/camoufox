@@ -444,6 +444,14 @@ def batch_launch_session(args: Dict[str, Any]) -> Dict[str, Any]:
     url = args.get("url")
     headless = bool(args.get("headless", False))
 
+    tile_rects = None
+    if args.get("tile"):
+        from launcher.bridge.screen import primary_monitor_size
+        from launcher.bridge.tiling import compute_tiles, parse_grid
+        grid = parse_grid(args.get("grid") or "auto")
+        sw, sh = primary_monitor_size()
+        tile_rects = compute_tiles(len(profile_ids), sw, sh, grid=grid)
+
     proxy_pool: list = []
     if strategy == "round-robin":
         filt = args.get("proxy_filter") or {}
@@ -489,6 +497,7 @@ def batch_launch_session(args: Dict[str, Any]) -> Dict[str, Any]:
                 auto_solve_captcha=bool(args.get("auto_solve_captcha", False)),
                 humanlike=bool(args.get("humanlike", False)),
                 run_macro=args.get("run_macro"),
+                tile=tile_rects[idx] if tile_rects and idx < len(tile_rects) else None,
             )
             spawned.append(mgr.as_dict(s))
         except Exception as e:  # noqa: BLE001 — batch must not bail on one failure
