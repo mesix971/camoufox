@@ -347,15 +347,29 @@ def _goto_with_retry(page, url: str, limiter: RateLimiter) -> None:
 
 
 def _main_loop(page, args, limiter: RateLimiter, detect_queue=None) -> None:
-    """Sleep loop with optional auto-refresh + queue monitor."""
+    """Sleep loop with optional auto-refresh + queue monitor.
+
+    Exits early if the browser / page is closed by the user (clicking the
+    window X), so the session status doesn't stay 'running' forever.
+    """
     refresh_interval = args.auto_refresh
     next_refresh = time.time() + _jitter(refresh_interval) if refresh_interval > 0 else None
     queue_notified = False
     last_queue_position = None
+    last_alive_check = 0.0
 
     while not _STOP:
         time.sleep(0.25)
         now = time.time()
+
+        # Periodically poke the page to detect manual window close.
+        if now - last_alive_check >= 2.0:
+            last_alive_check = now
+            try:
+                _ = page.url  # any attr access fails if the browser is gone
+            except Exception:  # noqa: BLE001
+                _log("browser closed by user — exiting loop")
+                return
 
         if next_refresh and now >= next_refresh:
             try:

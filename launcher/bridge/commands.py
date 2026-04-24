@@ -350,6 +350,32 @@ def launch_session(args: Dict[str, Any]) -> Dict[str, Any]:
     return {"session": mgr.as_dict(s)}
 
 
+def reopen_session(args: Dict[str, Any]) -> Dict[str, Any]:
+    """Relaunch a session using the old session's profile/proxy/url + persistent=True.
+
+    The persistent flag makes the new session pick up the previous session's
+    cookies/storage (saved under ~/.camoufox/launcher/user_data/<profile_id>/),
+    so the user sees "their" tabs, logged-in sites, etc. — within the limits
+    of what Firefox persists in a user profile.
+    """
+    mgr = _session_mgr()
+    old = mgr.load(args["id"])
+    s = mgr.spawn(
+        profile_id=old.profile_id,
+        proxy_id=old.proxy_id,
+        url=args.get("url") or old.url,
+        headless=bool(args.get("headless", old.headless)),
+        warmup=bool(args.get("warmup", False)),
+        auto_refresh=float(args.get("auto_refresh", 0) or 0),
+        persistent=True,  # key: restore the user's cookies
+        queue_monitor=bool(args.get("queue_monitor", False)),
+        rate_limit=int(args.get("rate_limit", 0) or 0),
+        auto_solve_captcha=bool(args.get("auto_solve_captcha", False)),
+        humanlike=bool(args.get("humanlike", False)),
+    )
+    return {"session": mgr.as_dict(s), "previous_id": args["id"]}
+
+
 def kill_session(args: Dict[str, Any]) -> Dict[str, Any]:
     mgr = _session_mgr()
     s = mgr.kill(args["id"], timeout=args.get("timeout", 5.0))
@@ -704,6 +730,7 @@ COMMANDS = {
     "list-sessions": list_sessions,
     "session-metrics": session_metrics,
     "launch-session": launch_session,
+    "reopen-session": reopen_session,
     "kill-session": kill_session,
     "kill-all-sessions": kill_all_sessions,
     "prune-sessions": prune_sessions,

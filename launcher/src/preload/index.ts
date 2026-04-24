@@ -53,6 +53,8 @@ const api = {
     humanlike?: boolean; run_macro?: string; record_macro?: string;
   }) => invoke(IPC.launchSession, args),
   killSession: (id: string) => invoke(IPC.killSession, { id }),
+  reopenSession: (id: string, args?: { url?: string; headless?: boolean }) =>
+    invoke(IPC.reopenSession, { id, ...(args ?? {}) }),
   sessionLog: (id: string, lines = 200) => invoke(IPC.sessionLog, { id, lines }),
   pruneSessions: () => invoke(IPC.pruneSessions),
   batchLaunchSession: (args: {

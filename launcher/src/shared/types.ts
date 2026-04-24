@@ -134,6 +134,7 @@ export const IPC = {
 
   listSessions: "list-sessions",
   launchSession: "launch-session",
+  reopenSession: "reopen-session",
   killSession: "kill-session",
   sessionLog: "session-log",
   pruneSessions: "prune-sessions",

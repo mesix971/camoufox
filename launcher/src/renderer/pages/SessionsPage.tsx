@@ -62,6 +62,16 @@ export function SessionsPage() {
     }
   };
 
+  const reopen = async (id: string) => {
+    try {
+      await api().reopenSession(id);
+      await refreshSessions();
+      showToast("success", "Session rouverte (persistante)");
+    } catch (e) {
+      showToast("error", (e as Error).message);
+    }
+  };
+
   const prune = async () => {
     try {
       const res = await api().pruneSessions() as { pruned: number };
@@ -158,6 +168,11 @@ export function SessionsPage() {
                     {(s.status === "running" || s.status === "starting") && (
                       <button type="button" className="btn-danger !py-1 !text-xs" onClick={() => kill(s.id)}>
                         Arrêter
+                      </button>
+                    )}
+                    {(s.status === "stopped" || s.status === "crashed") && (
+                      <button type="button" className="btn-primary !py-1 !text-xs" onClick={() => reopen(s.id)}>
+                        Réouvrir
                       </button>
                     )}
                   </div>
