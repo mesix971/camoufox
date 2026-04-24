@@ -131,7 +131,73 @@ def to_camoufox_config(p: Profile, include_build_id: bool = False) -> Dict[str, 
     if p.creepjs_bypass_host_patterns is not None:
         cfg["creepjs:bypass:hostPatterns"] = list(p.creepjs_bypass_host_patterns)
 
+    _emit_canvas_noise(cfg, p)
+    _emit_user_agent_data(cfg, p)
+    _emit_webrtc_ice(cfg, p)
+
     return cfg
+
+
+def _emit_canvas_noise(cfg: Dict[str, Any], p) -> None:
+    """P4 canvas/WebGL pixel noise."""
+    if getattr(p, "canvas_pixel_noise_enabled", None) is not None:
+        cfg["canvas:pixel_noise:enabled"] = p.canvas_pixel_noise_enabled
+    if getattr(p, "canvas_pixel_noise_amplitude", None) is not None:
+        cfg["canvas:pixel_noise:amplitude"] = int(p.canvas_pixel_noise_amplitude)
+    if getattr(p, "canvas_pixel_noise_frequency", None) is not None:
+        cfg["canvas:pixel_noise:frequency"] = float(p.canvas_pixel_noise_frequency)
+    if getattr(p, "canvas_pixel_noise_seed", None) is not None:
+        cfg["canvas:pixel_noise:seed"] = int(p.canvas_pixel_noise_seed)
+    if getattr(p, "webgl_readback_noise_enabled", None) is not None:
+        cfg["webgl:readback_noise:enabled"] = p.webgl_readback_noise_enabled
+    if getattr(p, "webgl_readback_noise_amplitude", None) is not None:
+        cfg["webgl:readback_noise:amplitude"] = int(p.webgl_readback_noise_amplitude)
+    if getattr(p, "webgl_readback_noise_seed", None) is not None:
+        cfg["webgl:readback_noise:seed"] = int(p.webgl_readback_noise_seed)
+
+
+def _emit_user_agent_data(cfg: Dict[str, Any], p) -> None:
+    """P4 navigator.userAgentData (Client Hints)."""
+    brands = getattr(p, "ua_data_brands", None)
+    if brands:
+        # list of dicts {brand, version} → "Brand|Version" strings for the
+        # JVV string-list type consumed by MaskConfig::GetStringList.
+        cfg["navigator:userAgentData:brands"] = [
+            f"{b['brand']}|{b['version']}" for b in brands
+        ]
+    if getattr(p, "ua_data_mobile", None) is not None:
+        cfg["navigator:userAgentData:mobile"] = bool(p.ua_data_mobile)
+    for py_attr, jvv_key in (
+        ("ua_data_platform", "navigator:userAgentData:platform"),
+        ("ua_data_architecture", "navigator:userAgentData:architecture"),
+        ("ua_data_bitness", "navigator:userAgentData:bitness"),
+        ("ua_data_model", "navigator:userAgentData:model"),
+        ("ua_data_platform_version", "navigator:userAgentData:platformVersion"),
+        ("ua_data_ua_full_version", "navigator:userAgentData:uaFullVersion"),
+    ):
+        v = getattr(p, py_attr, None)
+        if v:
+            cfg[jvv_key] = v
+    fvl = getattr(p, "ua_data_full_version_list", None)
+    if fvl:
+        cfg["navigator:userAgentData:fullVersionList"] = [
+            f"{b['brand']}|{b['version']}" for b in fvl
+        ]
+    if getattr(p, "ua_data_wow64", None) is not None:
+        cfg["navigator:userAgentData:wow64"] = bool(p.ua_data_wow64)
+
+
+def _emit_webrtc_ice(cfg: Dict[str, Any], p) -> None:
+    """P4 WebRTC ICE candidate ordering."""
+    order = getattr(p, "webrtc_ice_candidate_order", None)
+    if order:
+        cfg["webrtc:ice:candidateOrder"] = list(order)
+    if getattr(p, "webrtc_ice_shuffle", None) is not None:
+        cfg["webrtc:ice:shuffle"] = bool(p.webrtc_ice_shuffle)
+    if getattr(p, "webrtc_ice_seed", None) is not None:
+        cfg["webrtc:ice:seed"] = int(p.webrtc_ice_seed)
+    if getattr(p, "webrtc_ice_drop_host_candidates", None) is not None:
+        cfg["webrtc:ice:dropHostCandidates"] = bool(p.webrtc_ice_drop_host_candidates)
 
 
 def _emit_http2_settings(cfg: Dict[str, Any], p) -> None:

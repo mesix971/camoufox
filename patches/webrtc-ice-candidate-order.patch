@@ -1,0 +1,156 @@
+# WebRTC ICE candidate order spoofing — DRAFT
+#
+# When a page calls RTCPeerConnection.setLocalDescription(),
+# Firefox gathers ICE candidates (host / srflx / relay / prflx) and
+# emits them through onicecandidate in a deterministic order tied to
+# local NICs + OS behavior. Sites like Cloudflare Bot Management and
+# some Akamai features hash this order as part of an "RTP/ICE
+# fingerprint". Two sessions on the same machine have the same order,
+# so linked bot detection can group profiles together.
+#
+# This patch:
+#   1. Optionally drops host candidates entirely (so only srflx+relay
+#      are emitted — same as a real user behind NAT).
+#   2. Shuffles remaining candidates deterministically per profile
+#      (seed from MaskConfig) OR applies a user-specified explicit
+#      order via webrtc:ice:candidateOrder.
+#
+# Status: UNVERIFIED — targets
+#     dom/media/webrtc/jsapi/PeerConnectionImpl.cpp
+#     media/webrtc/signaling/src/peerconnection/MediaTransportHandler*.cpp
+# These files move between Firefox versions; adjust paths on rebuild.
+#
+# MaskConfig keys:
+#   webrtc:ice:candidateOrder       array — if non-empty, explicit order
+#                                   of candidate types: "host","srflx","relay"
+#   webrtc:ice:shuffle              bool  — else deterministic shuffle
+#   webrtc:ice:seed                 int   — shuffle seed (profile-derived)
+#   webrtc:ice:dropHostCandidates   bool  — default false; strip local
+#                                   IPs entirely (pretends NAT)
+
+diff --git a/dom/media/webrtc/jsapi/PeerConnectionImpl.cpp b/dom/media/webrtc/jsapi/PeerConnectionImpl.cpp
+--- a/dom/media/webrtc/jsapi/PeerConnectionImpl.cpp
++++ b/dom/media/webrtc/jsapi/PeerConnectionImpl.cpp
+@@ -40,6 +40,7 @@
+ #include "mozilla/dom/RTCIceCandidate.h"
+ #include "mozilla/dom/RTCPeerConnectionBinding.h"
+ #include "mozilla/dom/Promise.h"
++#include "MaskConfig.hpp"  // Camoufox
+
+ // ... existing includes ...
+
+@@ -2400,6 +2401,14 @@ nsresult PeerConnectionImpl::GatherIceCandidates(
+   //   ...other NrIceMediaStream gathering calls...
+ }
+
++// CAMOUFOX: filter + reorder candidates after gathering, before the
++// application's onicecandidate handler sees them.
++static void CamoufoxPostProcessCandidates(
++    nsTArray<RefPtr<RTCIceCandidate>>& aCandidates);
++
++static void CamoufoxPostProcessCandidates(
++    nsTArray<RefPtr<RTCIceCandidate>>& aCandidates) {
++  if (!MaskConfig::GetBool("webrtc:ice:dropHostCandidates").value_or(false) &&
++      !MaskConfig::GetBool("webrtc:ice:shuffle").value_or(false) &&
++      !MaskConfig::GetStringList("webrtc:ice:candidateOrder")) {
++    return;  // nothing to do
++  }
++
++  // 1) drop host candidates if requested (simulates strict NAT).
++  if (MaskConfig::GetBool("webrtc:ice:dropHostCandidates").value_or(false)) {
++    aCandidates.RemoveElementsBy([](const RefPtr<RTCIceCandidate>& c) {
++      nsString type;
++      c->GetType(type);
++      return type.EqualsLiteral("host");
++    });
++  }
++
++  // 2) explicit order takes precedence over shuffle.
++  auto orderOpt = MaskConfig::GetStringList("webrtc:ice:candidateOrder");
++  if (orderOpt && !orderOpt->IsEmpty()) {
++    // Stable-partition by type using the user order. Unknown types go last.
++    nsTArray<RefPtr<RTCIceCandidate>> reordered;
++    for (const auto& typeName : *orderOpt) {
++      for (auto& c : aCandidates) {
++        nsString type;
++        c->GetType(type);
++        if (type.Equals(typeName)) {
++          reordered.AppendElement(c);
++        }
++      }
++    }
++    // Append leftovers (types not mentioned in the order) in original order.
++    for (auto& c : aCandidates) {
++      if (!reordered.Contains(c)) {
++        reordered.AppendElement(c);
++      }
++    }
++    aCandidates = std::move(reordered);
++    return;
++  }
++
++  // 3) deterministic shuffle (Fisher-Yates with LCG seeded by profile).
++  if (MaskConfig::GetBool("webrtc:ice:shuffle").value_or(false)) {
++    uint64_t seed = 0xA3B4C5D6E7F80910ULL ^
++        (uint64_t)MaskConfig::GetInt32("webrtc:ice:seed").value_or(0);
++    auto lcg = [&seed]() -> uint64_t {
++      seed = seed * 6364136223846793005ULL + 1442695040888963407ULL;
++      return seed;
++    };
++    for (size_t i = aCandidates.Length(); i > 1; --i) {
++      size_t j = lcg() % i;
++      if (j != i - 1) std::swap(aCandidates[i - 1], aCandidates[j]);
++    }
++  }
++}
+
+ void PeerConnectionImpl::OnIceCandidateFound(
+     const std::string& candidate, const std::string& transportId,
+     const std::string& ufrag, uint16_t componentId) {
+@@ -2450,10 +2520,18 @@ void PeerConnectionImpl::OnIceCandidateFound(
+     return;
+   }
+
++  // CAMOUFOX: batch candidates and post-process in OnIceGatheringStateChanged
++  // (when gathering="complete") instead of firing them as they arrive.
++  mCamoufoxPendingCandidates.AppendElement(newCandidate);
++
++  // Only fire immediately if we're not applying any WebRTC ICE policy.
++  if (!MaskConfig::GetBool("webrtc:ice:dropHostCandidates").value_or(false) &&
++      !MaskConfig::GetBool("webrtc:ice:shuffle").value_or(false) &&
++      !MaskConfig::GetStringList("webrtc:ice:candidateOrder")) {
+     FireIceCandidateEvent(newCandidate);
++  }
+ }
+
+@@ -2500,6 +2578,14 @@ void PeerConnectionImpl::OnIceGatheringStateChange(
+                           ? RTCIceGatheringState::Complete
+                           : RTCIceGatheringState::Gathering);
+
++  // CAMOUFOX: when gathering completes, flush batched candidates after
++  // post-processing.
++  if (mIceGatheringState == RTCIceGatheringState::Complete &&
++      !mCamoufoxPendingCandidates.IsEmpty()) {
++    CamoufoxPostProcessCandidates(mCamoufoxPendingCandidates);
++    for (auto& c : mCamoufoxPendingCandidates) {
++      FireIceCandidateEvent(c);
++    }
++    mCamoufoxPendingCandidates.Clear();
++  }
++
+   // ... existing state change notification ...
+ }
+
+
+diff --git a/dom/media/webrtc/jsapi/PeerConnectionImpl.h b/dom/media/webrtc/jsapi/PeerConnectionImpl.h
+--- a/dom/media/webrtc/jsapi/PeerConnectionImpl.h
++++ b/dom/media/webrtc/jsapi/PeerConnectionImpl.h
+@@ -700,6 +700,9 @@ class PeerConnectionImpl final : public nsISupports,
+   RTCSignalingState mSignalingState{RTCSignalingState::Stable};
+   RTCIceGatheringState mIceGatheringState{RTCIceGatheringState::New};
+   RTCIceConnectionState mIceConnectionState{RTCIceConnectionState::New};
++
++  // CAMOUFOX: batched candidates awaiting post-processing + flush.
++  nsTArray<RefPtr<RTCIceCandidate>> mCamoufoxPendingCandidates;
+
+   // ... existing members ...

@@ -1,0 +1,240 @@
+# navigator.userAgentData (Client Hints) spoofing — DRAFT
+#
+# Modern WAFs (Cloudflare 2026, Akamai, DataDome v7) read Client Hints
+# in addition to the legacy userAgent string. If navigator.userAgent
+# says "Windows 11 Firefox 142" but navigator.userAgentData.platform
+# returns "Linux" — instant bot flag.
+#
+# This patch plumbs MaskConfig values into NavigatorUAData so both low-
+# entropy (.brands, .mobile, .platform) and high-entropy
+# (.getHighEntropyValues) values align with the rest of the profile.
+#
+# Note: Firefox's NavigatorUAData is behind a pref (dom.navigator.useragent.
+# userAgentData.enabled). Camoufox should enable it in camoufox.cfg so
+# sites actually observe these values.
+#
+# Status: UNVERIFIED — requires inspection of the current NavigatorUA*
+# implementation in dom/base/. Line numbers are approximate.
+#
+# MaskConfig keys:
+#   navigator:userAgentData:brands              array [{brand, version}]
+#   navigator:userAgentData:mobile              bool
+#   navigator:userAgentData:platform            str ("Windows" | "macOS" | "Linux" | "Android")
+#   navigator:userAgentData:architecture        str ("x86" | "arm")
+#   navigator:userAgentData:bitness             str ("64" | "32")
+#   navigator:userAgentData:model               str (desktop: "", mobile: "SM-G998B" etc.)
+#   navigator:userAgentData:platformVersion     str ("15.0.0" for Win 11, "14.2.1" for macOS 14)
+#   navigator:userAgentData:uaFullVersion       str ("142.0.1")
+#   navigator:userAgentData:fullVersionList     array [{brand, version}]
+#   navigator:userAgentData:wow64               bool
+#
+# Apply:
+#   cd camoufox-142.0.1-fork.27
+#   patch -p1 -i ../patches/navigator-user-agent-data.patch --fuzz=5
+#   git diff > ../patches/navigator-user-agent-data.patch
+
+diff --git a/dom/base/Navigator.cpp b/dom/base/Navigator.cpp
+--- a/dom/base/Navigator.cpp
++++ b/dom/base/Navigator.cpp
+@@ -60,6 +60,7 @@
+ #include "mozilla/dom/WindowGlobalChild.h"
+ #include "mozilla/dom/WorkerNavigator.h"
+ #include "mozilla/dom/WorkerPrivate.h"
++#include "MaskConfig.hpp"  // Camoufox
+
+ // ... existing includes ...
+
+@@ -500,6 +501,14 @@ already_AddRefed<NavigatorUAData> Navigator::UserAgentData() {
+   if (!mUserAgentData) {
+     mUserAgentData = new NavigatorUAData(GetOwnerGlobal());
+   }
++  // CAMOUFOX: inject spoofed brands + platform + mobile on first access.
++  // Done here instead of in the constructor because MaskConfig may not
++  // yet be loaded at construction time.
++  static bool spoofed = false;
++  if (!spoofed) {
++    mUserAgentData->CamoufoxInjectSpoofed();
++    spoofed = true;
++  }
+   return do_AddRef(mUserAgentData);
+ }
+
+diff --git a/dom/base/NavigatorUAData.h b/dom/base/NavigatorUAData.h
+--- a/dom/base/NavigatorUAData.h
++++ b/dom/base/NavigatorUAData.h
+@@ -40,6 +40,9 @@ class NavigatorUAData final : public nsISupports, public nsWrapperCache {
+   // Resolves to a UADataValues dict with optional high-entropy fields.
+   already_AddRefed<Promise> GetHighEntropyValues(
+       const nsTArray<nsString>& aHints, ErrorResult& aRv);
+
++  // CAMOUFOX: populate mBrands / mMobile / mPlatform from MaskConfig.
++  void CamoufoxInjectSpoofed();
++
+  private:
+   ~NavigatorUAData();
+
+diff --git a/dom/base/NavigatorUAData.cpp b/dom/base/NavigatorUAData.cpp
+--- a/dom/base/NavigatorUAData.cpp
++++ b/dom/base/NavigatorUAData.cpp
+@@ -10,6 +10,7 @@
+ #include "mozilla/dom/Promise.h"
+ #include "mozilla/dom/UADataValues.h"
+ #include "mozilla/dom/NavigatorUADataBinding.h"
++#include "MaskConfig.hpp"  // Camoufox
+
+ namespace mozilla::dom {
+
+@@ -60,6 +61,33 @@ bool NavigatorUAData::Mobile() const { return mMobile; }
+
+ const nsString& NavigatorUAData::Platform() const { return mPlatform; }
+
++// CAMOUFOX: read MaskConfig once and stash values.
++void NavigatorUAData::CamoufoxInjectSpoofed() {
++  // Low-entropy fields (always exposed):
++  auto brandsOpt = MaskConfig::GetStringList("navigator:userAgentData:brands");
++  if (brandsOpt) {
++    mBrands.Clear();
++    // Each entry in the list is "Brand|Version" (pipe-separated) to
++    // keep the JVV string-list simple. If you need structured input,
++    // encode as JSON in the single element.
++    for (const auto& entry : *brandsOpt) {
++      auto pipe = entry.FindChar('|');
++      if (pipe < 0) continue;
++      NavigatorUABrandVersion nv;
++      nv.mBrand.Assign(Substring(entry, 0, pipe));
++      nv.mVersion.Assign(Substring(entry, pipe + 1));
++      mBrands.AppendElement(std::move(nv));
++    }
++  }
++  if (auto m = MaskConfig::GetBool("navigator:userAgentData:mobile")) {
++    mMobile = *m;
++  }
++  if (auto p = MaskConfig::GetString("navigator:userAgentData:platform")) {
++    CopyUTF8toUTF16(*p, mPlatform);
++  }
++  // High-entropy values are stashed separately and emitted by
++  // GetHighEntropyValues below.
++}
+
+ already_AddRefed<Promise> NavigatorUAData::GetHighEntropyValues(
+     const nsTArray<nsString>& aHints, ErrorResult& aRv) {
+@@ -80,14 +108,33 @@ already_AddRefed<Promise> NavigatorUAData::GetHighEntropyValues(
+
+   UADataValues values;
+-  values.mBrands = mBrands;
+-  values.mMobile = mMobile;
+-  values.mPlatform = mPlatform;
++
++  auto readStr = [](const char* key, nsString& dst) {
++    if (auto v = MaskConfig::GetString(key)) {
++      CopyUTF8toUTF16(*v, dst);
++    }
++  };
++
++  values.mBrands = mBrands;
++  values.mMobile = mMobile;
++  values.mPlatform = mPlatform;
++
+   // CAMOUFOX: only emit the hint fields the caller asked for, and
+-  // backfill from MaskConfig.
++  // backfill from MaskConfig. This mirrors real Firefox behavior —
++  // getHighEntropyValues() only resolves requested keys.
+   for (const auto& hint : aHints) {
+-    // architecture, bitness, model, platformVersion, uaFullVersion,
+-    // fullVersionList, wow64
++    if (hint.EqualsLiteral("architecture")) {
++      readStr("navigator:userAgentData:architecture", values.mArchitecture.Construct());
++    } else if (hint.EqualsLiteral("bitness")) {
++      readStr("navigator:userAgentData:bitness", values.mBitness.Construct());
++    } else if (hint.EqualsLiteral("model")) {
++      readStr("navigator:userAgentData:model", values.mModel.Construct());
++    } else if (hint.EqualsLiteral("platformVersion")) {
++      readStr("navigator:userAgentData:platformVersion", values.mPlatformVersion.Construct());
++    } else if (hint.EqualsLiteral("uaFullVersion")) {
++      readStr("navigator:userAgentData:uaFullVersion", values.mUaFullVersion.Construct());
++    } else if (hint.EqualsLiteral("wow64")) {
++      if (auto w = MaskConfig::GetBool("navigator:userAgentData:wow64")) {
++        values.mWow64.Construct(*w);
++      }
++    } else if (hint.EqualsLiteral("fullVersionList")) {
++      auto listOpt = MaskConfig::GetStringList("navigator:userAgentData:fullVersionList");
++      if (listOpt) {
++        auto& out = values.mFullVersionList.Construct();
++        for (const auto& entry : *listOpt) {
++          auto pipe = entry.FindChar('|');
++          if (pipe < 0) continue;
++          NavigatorUABrandVersion nv;
++          nv.mBrand.Assign(Substring(entry, 0, pipe));
++          nv.mVersion.Assign(Substring(entry, pipe + 1));
++          out.AppendElement(std::move(nv));
++        }
++      }
++    }
+   }
+
+   promise->MaybeResolve(values);
+
+
+# Also plumb Client Hints headers into outgoing HTTPS requests so
+# Sec-CH-UA, Sec-CH-UA-Mobile, Sec-CH-UA-Platform match the JS values.
+diff --git a/netwerk/protocol/http/nsHttpChannel.cpp b/netwerk/protocol/http/nsHttpChannel.cpp
+--- a/netwerk/protocol/http/nsHttpChannel.cpp
++++ b/netwerk/protocol/http/nsHttpChannel.cpp
+@@ -42,6 +42,7 @@
+ #include "nsIURLQueryStringStripper.h"
+ #include "nsIUrlClassifierFeature.h"
+ #include "nsIX509Cert.h"
++#include "MaskConfig.hpp"  // Camoufox
+
+ // ... existing includes ...
+
+@@ -1200,6 +1201,46 @@ nsresult nsHttpChannel::SetHttpRequestHeader() {
+   // ... existing header setup ...
+
++  // CAMOUFOX: inject Client Hints headers matching navigator.userAgentData.
++  // These headers appear on every outgoing request once the server has
++  // requested them via Accept-CH. We emit them unconditionally — the
++  // small size cost is worth staying consistent.
++  if (auto brandsOpt = MaskConfig::GetStringList("navigator:userAgentData:brands")) {
++    nsCString ch;
++    bool first = true;
++    for (const auto& entry : *brandsOpt) {
++      auto pipe = entry.FindChar('|');
++      if (pipe < 0) continue;
++      if (!first) ch.AppendLiteral(", ");
++      first = false;
++      ch.AppendLiteral("\"");
++      ch.Append(Substring(entry, 0, pipe));
++      ch.AppendLiteral("\";v=\"");
++      ch.Append(Substring(entry, pipe + 1));
++      ch.AppendLiteral("\"");
++    }
++    if (!ch.IsEmpty()) {
++      SetRequestHeader("Sec-CH-UA"_ns, ch, /*merge=*/false);
++    }
++  }
++  if (auto m = MaskConfig::GetBool("navigator:userAgentData:mobile")) {
++    SetRequestHeader("Sec-CH-UA-Mobile"_ns,
++                     *m ? "?1"_ns : "?0"_ns, false);
++  }
++  if (auto p = MaskConfig::GetString("navigator:userAgentData:platform")) {
++    nsCString v("\"");
++    v.Append(*p);
++    v.AppendLiteral("\"");
++    SetRequestHeader("Sec-CH-UA-Platform"_ns, v, false);
++  }
++  // High-entropy hints are only sent after the server requests them via
++  // Accept-CH. Check that header from the last response on this origin.
++  if (HasAcceptCHFor("Sec-CH-UA-Platform-Version")) {
++    if (auto pv = MaskConfig::GetString("navigator:userAgentData:platformVersion")) {
++      nsCString v("\"");
++      v.Append(*pv);
++      v.AppendLiteral("\"");
++      SetRequestHeader("Sec-CH-UA-Platform-Version"_ns, v, false);
++    }
++  }
++  // (Sec-CH-UA-Arch, -Bitness, -Model, -Full-Version-List follow the same
++  //  pattern — omitted here for brevity.)
++
+   return NS_OK;
+ }

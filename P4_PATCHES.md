@@ -99,6 +99,70 @@ cfg = fpgen.to_camoufox_config(p)
 Profiles without P4 fields emit no P4 keys — Firefox uses its built-in
 defaults, which is the correct behaviour for 99% of use cases.
 
+## New in this batch (unverified drafts)
+
+Three additional patches target fingerprint surfaces not covered yet by
+Camoufox. None have been applied to a live Firefox tree; line numbers are
+approximate and may fuzz on apply. Re-generate each with
+`git diff > patches/<name>.patch` after your first successful apply.
+
+### canvas-webgl-pixel-noise.patch (v2)
+Completed `toDataURL` encoding path + moved the noise math into a new
+shared header `additions/camoucfg/CamoufoxCanvasNoise.hpp`. Both
+`CanvasRenderingContext2D::GetImageData`, `CanvasRenderingContext2D::ToDataURL`,
+and `WebGLContext::ReadPixels` call the same function.
+
+Profile fields: `canvas_pixel_noise_enabled`, `canvas_pixel_noise_amplitude`,
+`canvas_pixel_noise_frequency`, `canvas_pixel_noise_seed`,
+`webgl_readback_noise_enabled`, `webgl_readback_noise_amplitude`,
+`webgl_readback_noise_seed`.
+
+### navigator-user-agent-data.patch
+Spoofs `navigator.userAgentData`:
+- Low-entropy: `.brands`, `.mobile`, `.platform`
+- High-entropy (`getHighEntropyValues()`): `architecture`, `bitness`,
+  `model`, `platformVersion`, `uaFullVersion`, `fullVersionList`, `wow64`
+- Matching `Sec-CH-UA`, `Sec-CH-UA-Mobile`, `Sec-CH-UA-Platform` HTTP
+  request headers injected in `nsHttpChannel::SetHttpRequestHeader`.
+
+Critical for Cloudflare 2026 + Akamai — they compare JS-side UA-CH
+against HTTP header UA-CH and flag mismatches.
+
+Profile fields: `ua_data_brands`, `ua_data_mobile`, `ua_data_platform`,
+`ua_data_architecture`, `ua_data_bitness`, `ua_data_model`,
+`ua_data_platform_version`, `ua_data_ua_full_version`,
+`ua_data_full_version_list`, `ua_data_wow64`.
+
+Brands + fullVersionList pass as "Brand|Version" strings (MaskConfig
+string-list limitation); the patch parses the pipe back into
+`NavigatorUABrandVersion` structs.
+
+### webrtc-ice-candidate-order.patch
+Batches ICE candidates in `PeerConnectionImpl::OnIceCandidateFound` until
+gathering completes, then:
+1. Drops host candidates entirely (pretends strict NAT) if requested
+2. Reorders by explicit type list (`webrtc:ice:candidateOrder`)
+3. Deterministic-shuffles with an LCG seeded by `webrtc:ice:seed`
+
+Fires `FireIceCandidateEvent` from the batched list after processing.
+
+Profile fields: `webrtc_ice_candidate_order`, `webrtc_ice_shuffle`,
+`webrtc_ice_seed`, `webrtc_ice_drop_host_candidates`.
+
+## Apply workflow for all three
+
+```bash
+cd camoufox-142.0.1-fork.27
+for p in canvas-webgl-pixel-noise navigator-user-agent-data webrtc-ice-candidate-order; do
+  patch -p1 -i ../patches/${p}.patch --fuzz=5 || echo "check rejects"
+done
+# fix .rej files manually, then regenerate:
+for p in canvas-webgl-pixel-noise navigator-user-agent-data webrtc-ice-candidate-order; do
+  git diff HEAD > ../patches/${p}.patch  # or diff only the relevant files
+done
+make build
+```
+
 ## What's intentionally NOT included
 
 - **Cipher-suite reordering**: `tls:cipherSuites:order` is in the schema but

@@ -124,6 +124,30 @@
   { "property": "tls:cipherSuites:order", "type": "array" },
   { "property": "tls:alpn:order", "type": "array" },
 
+  { "property": "canvas:pixel_noise:enabled", "type": "bool" },
+  { "property": "canvas:pixel_noise:amplitude", "type": "int" },
+  { "property": "canvas:pixel_noise:frequency", "type": "double" },
+  { "property": "canvas:pixel_noise:seed", "type": "int" },
+  { "property": "webgl:readback_noise:enabled", "type": "bool" },
+  { "property": "webgl:readback_noise:amplitude", "type": "int" },
+  { "property": "webgl:readback_noise:seed", "type": "int" },
+
+  { "property": "navigator:userAgentData:brands", "type": "array" },
+  { "property": "navigator:userAgentData:mobile", "type": "bool" },
+  { "property": "navigator:userAgentData:platform", "type": "str" },
+  { "property": "navigator:userAgentData:architecture", "type": "str" },
+  { "property": "navigator:userAgentData:bitness", "type": "str" },
+  { "property": "navigator:userAgentData:model", "type": "str" },
+  { "property": "navigator:userAgentData:platformVersion", "type": "str" },
+  { "property": "navigator:userAgentData:uaFullVersion", "type": "str" },
+  { "property": "navigator:userAgentData:fullVersionList", "type": "array" },
+  { "property": "navigator:userAgentData:wow64", "type": "bool" },
+
+  { "property": "webrtc:ice:candidateOrder", "type": "array" },
+  { "property": "webrtc:ice:shuffle", "type": "bool" },
+  { "property": "webrtc:ice:seed", "type": "int" },
+  { "property": "webrtc:ice:dropHostCandidates", "type": "bool" },
+
   { "property": "creepjs:bypass:enabled", "type": "bool" },
   { "property": "creepjs:bypass:fakeScore", "type": "double" },
   { "property": "creepjs:bypass:hostPatterns", "type": "array" }

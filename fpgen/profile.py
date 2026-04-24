@@ -107,6 +107,34 @@ class Profile:
     creepjs_bypass_fake_score: Optional[float] = None
     creepjs_bypass_host_patterns: Optional[List[str]] = None
 
+    # P4 canvas/WebGL pixel noise (requires canvas-webgl-pixel-noise.patch).
+    canvas_pixel_noise_enabled: Optional[bool] = None
+    canvas_pixel_noise_amplitude: Optional[int] = None
+    canvas_pixel_noise_frequency: Optional[float] = None
+    canvas_pixel_noise_seed: Optional[int] = None
+    webgl_readback_noise_enabled: Optional[bool] = None
+    webgl_readback_noise_amplitude: Optional[int] = None
+    webgl_readback_noise_seed: Optional[int] = None
+
+    # P4 navigator.userAgentData / Client Hints
+    # (requires navigator-user-agent-data.patch).
+    ua_data_brands: Optional[List[dict]] = None        # [{brand, version}]
+    ua_data_mobile: Optional[bool] = None
+    ua_data_platform: Optional[str] = None
+    ua_data_architecture: Optional[str] = None
+    ua_data_bitness: Optional[str] = None
+    ua_data_model: Optional[str] = None
+    ua_data_platform_version: Optional[str] = None
+    ua_data_ua_full_version: Optional[str] = None
+    ua_data_full_version_list: Optional[List[dict]] = None
+    ua_data_wow64: Optional[bool] = None
+
+    # P4 WebRTC ICE ordering (requires webrtc-ice-candidate-order.patch).
+    webrtc_ice_candidate_order: Optional[List[str]] = None
+    webrtc_ice_shuffle: Optional[bool] = None
+    webrtc_ice_seed: Optional[int] = None
+    webrtc_ice_drop_host_candidates: Optional[bool] = None
+
     def to_json(self) -> str:
         return json.dumps(asdict(self), indent=2, sort_keys=True)
 
