@@ -13,6 +13,7 @@ Public API:
     KNOWN_QUEUES                    (per-kind selector / URL-pattern config)
 """
 
+from queuepool.apiclient import ApiPollResult, QueueItClient
 from queuepool.detectors import (
     KNOWN_QUEUES,
     QueueKind,
@@ -22,7 +23,9 @@ from queuepool.detectors import (
 from queuepool.monitor import QueueMonitor
 
 __all__ = [
+    "ApiPollResult",
     "KNOWN_QUEUES",
+    "QueueItClient",
     "QueueKind",
     "QueueMonitor",
     "QueueState",

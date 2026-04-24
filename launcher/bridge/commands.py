@@ -634,6 +634,134 @@ def delete_macro(args: Dict[str, Any]) -> Dict[str, Any]:
     return {"deleted": args["name"]}
 
 
+# --- cookie export ---
+
+def export_profile_cookies(args: Dict[str, Any]) -> Dict[str, Any]:
+    """Dump cookies + storage from a profile's persistent user_data_dir.
+
+    Optional `visit_urls` = list[str] to visit (for per-origin localStorage).
+    Optional `post_webhook` = bool: upload the JSON blob to the configured
+    Discord webhook (or the one in `webhook_url`).
+    """
+    from launcher.bridge import cookie_export as ce
+    result = ce.export_profile_cookies(
+        profile_id=args["profile_id"],
+        visit_urls=args.get("visit_urls"),
+        output_dir=args.get("output_dir"),
+    )
+    if args.get("post_webhook"):
+        result["webhook_delivered"] = ce.post_export_to_webhook(
+            result, url=args.get("webhook_url"),
+        )
+    return result
+
+
+# --- Queue-it API polling (no browser needed) ---
+
+def queueit_poll(args: Dict[str, Any]) -> Dict[str, Any]:
+    """One-shot HTTP poll of a queue URL. Returns position + metadata without
+    launching Camoufox — cheap enough to fan-out 100+ sessions.
+
+    Usually you'll have gathered cookies from an earlier Camoufox visit and
+    pass them via `cookies` (list of {name, value, domain, path}).
+    """
+    import queuepool
+    from dataclasses import asdict as _asdict
+    import requests as _req
+    sess = _req.Session()
+    for c in args.get("cookies") or []:
+        sess.cookies.set(
+            c.get("name", ""), c.get("value", ""),
+            domain=c.get("domain"), path=c.get("path", "/"),
+        )
+    client = queuepool.QueueItClient(
+        session=sess,
+        proxy=args.get("proxy"),
+        user_agent=args.get("user_agent"),
+    )
+    res = client.poll(args["queue_url"])
+    return {"result": _asdict(res)}
+
+
+def queueit_parse_url(args: Dict[str, Any]) -> Dict[str, Any]:
+    """Extract customerId/eventId/token from a queue URL."""
+    import queuepool
+    return queuepool.QueueItClient.parse_queue_url(args["url"])
+
+
+# --- warmup scheduler ---
+
+def warmup_profile(args: Dict[str, Any]) -> Dict[str, Any]:
+    """Enqueue a warmup task for a profile.
+
+    Args:
+      profile_id: required
+      proxy_id: optional
+      target_url: optional (site to hit so Queue-it sees cookies later)
+      duration_minutes: float = 15
+      when: ISO datetime string, or delay_minutes: float
+    """
+    from datetime import datetime, timedelta, timezone
+    q = _task_queue()
+    action = {
+        "type": "warmup",
+        "profile_id": args["profile_id"],
+        "duration_minutes": float(args.get("duration_minutes", 15)),
+    }
+    if args.get("proxy_id"):
+        action["proxy_id"] = args["proxy_id"]
+    if args.get("target_url"):
+        action["target_url"] = args["target_url"]
+    scheduled_at = None
+    if args.get("when"):
+        scheduled_at = datetime.fromisoformat(args["when"])
+    elif args.get("delay_minutes"):
+        scheduled_at = datetime.now(timezone.utc) + timedelta(
+            minutes=float(args["delay_minutes"])
+        )
+    task = q.enqueue(
+        action=action, scheduled_at=scheduled_at,
+        tags=["warmup"] + list(args.get("tags") or []),
+    )
+    return {"task": asdict(task)}
+
+
+def warmup_batch(args: Dict[str, Any]) -> Dict[str, Any]:
+    """Enqueue a warmup for each profile in profile_ids, spreading the start
+    times across `window_minutes` so they don't all hit the target at once.
+    """
+    from datetime import datetime, timedelta, timezone
+    import random as _random
+
+    profile_ids = args["profile_ids"]
+    if not isinstance(profile_ids, list) or not profile_ids:
+        raise ValueError("profile_ids must be a non-empty list")
+
+    window_min = float(args.get("window_minutes", 30))
+    first_at = args.get("start_at")
+    first_dt = datetime.fromisoformat(first_at) if first_at else datetime.now(timezone.utc)
+
+    q = _task_queue()
+    enqueued = []
+    for pid in profile_ids:
+        jitter = _random.uniform(0, window_min)
+        action = {
+            "type": "warmup",
+            "profile_id": pid,
+            "duration_minutes": float(args.get("duration_minutes", 15)),
+        }
+        if args.get("target_url"):
+            action["target_url"] = args["target_url"]
+        t = q.enqueue(
+            action=action,
+            scheduled_at=first_dt + timedelta(minutes=jitter),
+            tags=["warmup", "batch"] + list(args.get("tags") or []),
+        )
+        enqueued.append({"task_id": t.id, "profile_id": pid,
+                         "scheduled_at": t.scheduled_at})
+    return {"enqueued": len(enqueued), "tasks": enqueued}
+
+
 # --- creepjs scoring ---
 
 def score_profile_creepjs(args: Dict[str, Any]) -> Dict[str, Any]:
@@ -766,4 +894,10 @@ COMMANDS = {
     "show-macro": show_macro,
     "save-macro": save_macro,
     "delete-macro": delete_macro,
+
+    "export-profile-cookies": export_profile_cookies,
+    "queueit-poll": queueit_poll,
+    "queueit-parse-url": queueit_parse_url,
+    "warmup-profile": warmup_profile,
+    "warmup-batch": warmup_batch,
 }

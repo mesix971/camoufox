@@ -361,6 +361,13 @@ Normal — `python3.exe` sur Windows est un stub. Le launcher utilise `py -3` de
 - `_pid_alive` via ctypes (reliable status tracking)
 - Installeurs multi-OS (AppImage, deb, exe, dmg, zip)
 
+### 🎯 Outils "bot à l'échelle" (drops / ticketing pro)
+
+- **Cookie export** (`export-profile-cookies`) — dump cookies + localStorage + sessionStorage d'un profil persistant dans 2 formats (JSON + Netscape cookies.txt). Option `post_webhook` pour balancer le .json vers Discord automatiquement → l'humain importe dans son propre navigateur pour compléter le paiement (workflow "handoff manuel" des drops sérieux).
+- **Queue-it API client** (`queueit-poll`, `queueit-parse-url`, `queuepool.QueueItClient`) — polling HTTP direct du status de la queue sans relancer Playwright. Utilise les cookies d'une session Camoufox existante. Scale à 1000+ sessions en monitoring parallèle sans exploser la RAM.
+- **Warmup scheduler** (`warmup-profile`, `warmup-batch`) — enfile des tâches dans `taskqueue` pour préchauffer N profils 24-72 h avant un drop. Chaque tâche lance une session persistante qui navigue sur des sites mainstream + la cible, construit cookies + historique, puis se ferme. Start times décalés aléatoirement dans une fenêtre (`window_minutes`) pour éviter que 100 profils hit le site à la même seconde.
+- **Task worker daemon** (`python -m launcher.bridge.task_worker`) — exécute les tâches enfilées (launch-session / warmup / batch-launch) avec retry+backoff automatique. À lancer en systemd service ou en arrière-plan, coordonne via fichiers atomiques (multi-worker safe).
+
 ### 🟢 UI complète
 - **CreepJS** : bouton "Tester CreepJS" sur chaque profil + badge coloré (vert ✓ passed / rouge ✗ failed) avec scores FP/Trust
 - **Humanlike** : checkbox "Humanlike (souris + frappe réaliste)" dans Options avancées
