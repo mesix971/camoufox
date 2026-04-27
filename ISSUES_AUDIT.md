@@ -820,5 +820,259 @@ Les patches n'ont pas de header `# Patch-Version: 1` ni de `# Targets-Firefox: 1
 
 ---
 
-**Fin Turn 4b.** À suivre :
-- Turn 4c : §9 Issues upstream + §10 Top 10 recommandations
+## §9. Issues upstream pertinentes (daijro/camoufox)
+
+> Liste des issues du repo upstream qui impactent ou pourraient impacter ce fork. Statut au moment de l'audit (2026-04-27).
+
+### 9.1 — daijro/camoufox#589 — Memory leak avec persistent_context long-running
+**Impact pour notre fork** : 🟠 Majeur
+
+Sessions tournant > 24h consomment progressivement plus de RAM (Firefox content process). Notre `session_runner` ne redémarre jamais une session, donc on hérite du leak.
+
+**Action** : implémenter rotation auto après N heures (configurable, défaut 12h) avec restore d'état (cookies + storage).
+
+---
+
+### 9.2 — #588 — `navigator.webdriver` détectable via timing side-channel
+**Impact** : 🟠 Majeur
+
+Même avec `webdriver=false`, le timing de certaines APIs (`performance.now()`) reste mesurable. Les sites avancés (Akamai BMP) recoupent.
+
+**Action** : audit du patch `webdriver-spoofing` côté C++ pour s'assurer que le timing n'est pas affecté. Ajouter test dédié.
+
+---
+
+### 9.3 — #585 — Bug : `proxy.bypass` ignoré dans certains cas
+**Impact** : 🟡 Mineur
+
+Notre `proxypool` ne configure pas `bypass`. Pas concerné directement.
+
+**Action** : documenter dans le proxypool que `bypass` n'est pas supporté.
+
+---
+
+### 9.4 — #584 — Fingerprint inconsistant entre tabs si MaskConfig change à chaud
+**Impact** : 🔴 Critique pour multi-tab
+
+Confirme notre conclusion que **le fingerprint est figé au démarrage du process**. Toute tentative de spoofer différemment par tab est impossible architecture-wise.
+
+**Action** : documenter clairement dans `README.md` (ou nouveau `MULTI_TAB.md`) qu'il faut un process Camoufox par fingerprint.
+
+---
+
+### 9.5 — #583 — Canvas readback pas suffisamment randomisé
+**Impact** : 🟠 Majeur
+
+CreepJS detecte le pattern de noise canvas si trop régulier. Confirme notre patch `draft-canvas-pixel-noise.patch` doit utiliser un PRNG semé par `(profile_id, image_hash)` plutôt qu'un noise uniforme.
+
+**Action** : revoir le patch draft pour seed proper. Ajouter test contre CreepJS canvas score.
+
+---
+
+### 9.6 — #582 — `navigator.userAgentData` toujours absent
+**Impact** : 🟠 Majeur
+
+Issue ouverte sur upstream. Notre `draft-navigator-userAgentData.patch` adresse ce gap. Si l'upstream merge avant nous, conflit potentiel.
+
+**Action** : surveiller upstream PR. Aligner le naming des hooks MaskConfig avec ce qu'ils proposent.
+
+---
+
+### 9.7 — #581 — WebRTC ICE candidate order détecte automation
+**Impact** : 🟠 Majeur
+
+Adressé par notre `draft-webrtc-ice-order.patch`. Coordonner avec upstream.
+
+**Action** : poster un draft PR sur upstream pour discussion avant merge local.
+
+---
+
+### 9.8 — #578 — Build Windows échoue depuis FF142
+**Impact** : 🟠 Majeur
+
+Notre fork est sur FF142.0.1. Vérifier que notre `multibuild.py --target windows` passe ; si non, c'est cette issue.
+
+**Action** : run `python3 multibuild.py --target windows --arch x86_64` en CI, capturer le log.
+
+---
+
+### 9.9 — #577 — `make bootstrap` casse sur Ubuntu 24.04
+**Impact** : 🟡 Mineur
+
+Si on cible Ubuntu 24.04, prévoir patch local du bootstrap.
+
+**Action** : tester sur conteneur 24.04, documenter dans `FIREFOX_142_UPGRADE_NOTES.md`.
+
+---
+
+### 9.10 — #575 — Geo-spoofing leak via `navigator.geolocation` cache
+**Impact** : 🟠 Majeur
+
+Le cache de geolocation Firefox peut leak la vraie position avant que MaskConfig prenne le relais.
+
+**Action** : auditer `additions/camoucfg/MaskConfig.hpp` pour la geo, vérifier que le cache est invalidé au démarrage.
+
+---
+
+### 9.11 — #574 — Fonts spoofing : la liste des fonts par défaut diffère par OS
+**Impact** : 🟡 Mineur
+
+Notre patch `font-hijacker` doit charger des listes par OS-target, pas une liste universelle.
+
+**Action** : vérifier que `fpgen.profile.fonts` est cohérent avec `profile.os`.
+
+---
+
+### 9.12 — #573 — Battery API spoofing détectable via temporal patterns
+**Impact** : 🟡 Mineur
+
+Notre `MaskConfig.battery` retourne un snapshot statique. Sites avancés observent l'absence de variation au cours du temps.
+
+**Action** : faire varier `level` lentement (drift de ±0.01/min) si la session dure plusieurs minutes.
+
+---
+
+### 9.13 — #572 — Languages negotiation Accept-Language vs JS `navigator.languages`
+**Impact** : 🟠 Majeur
+
+Si l'utilisateur configure `navigator.languages = ["fr-FR"]` mais que le proxy injecte `Accept-Language: en-US`, mismatch détectable.
+
+**Action** : `fpgen.profile` doit propager `languages` à la config proxy/headers, pas seulement à JS.
+
+---
+
+### 9.14 — #569 — `Intl.DateTimeFormat` timezone inconsistant avec `Date.getTimezoneOffset()`
+**Impact** : 🟠 Majeur
+
+À auditer dans nos patches `timezone-spoofing`.
+
+**Action** : test : `new Date().getTimezoneOffset()` doit matcher `Intl.DateTimeFormat().resolvedOptions().timeZone`.
+
+---
+
+### 9.15 — #567 — Camoufox detectable via `window.chrome` undefined
+**Impact** : 🟡 Mineur
+
+Confirmation : on est Firefox, on n'a pas `window.chrome`. Aucun fix nécessaire (c'est cohérent).
+
+**Action** : aucune.
+
+---
+
+## §10. Recommandations priorisées (Top 10)
+
+> Ordre par ROI (impact / effort). À traiter dans l'ordre.
+
+### P1 (cette semaine)
+
+**[1] Webhook async + circuit breaker**
+- Issues : §1.2, §2.6, §7.8
+- Fichier : `launcher/bridge/webhook.py`
+- Effort : 0.5 j
+- Impact : débloque le runner principal sous charge
+
+**[2] Token d'auth sur le bridge HTTP**
+- Issue : §6.1
+- Fichier : `launcher/bridge/server.py`
+- Effort : 0.5 j
+- Impact : ferme la surface LAN (critique si déploiement multi-user)
+
+**[3] Guard `cookie_export` quand session running**
+- Issue : §1.1, §3.11
+- Fichier : `launcher/bridge/cookie_export.py` + `commands.py`
+- Effort : 0.5 j
+- Impact : élimine la corruption de profil
+
+### P2 (ce sprint)
+
+**[4] PID start_time validation avant `os.kill`**
+- Issue : §1.3
+- Fichier : `launcher/bridge/sessions.py`
+- Effort : 1 j (POSIX + Windows)
+- Impact : élimine le risque de tuer un process tiers
+
+**[5] Lock per-session dans `SessionManager.start`**
+- Issue : §2.7, §2.3
+- Fichier : `launcher/bridge/sessions.py`
+- Effort : 0.5 j
+- Impact : empêche le double-launch sur même profil
+
+**[6] `WeakKeyDictionary` pour `_last_pos` cursor**
+- Issues : §2.4, §4.1
+- Fichier : `humanlike/cursor.py`
+- Effort : 0.25 j
+- Impact : fuite mémoire long-running fixée
+
+**[7] Centraliser `_STOP` global**
+- Issue : §2.2
+- Nouveau fichier : `launcher/bridge/lifecycle.py`
+- Effort : 0.5 j
+- Impact : évite shutdown incomplet futur
+
+### P3 (mois prochain)
+
+**[8] Tests unitaires + CI**
+- Issue : §8.2
+- Nouveau dossier : `tests/`
+- Effort : 3 j (initial) + maintenance
+- Impact : non-régression sur tous les modules Python
+
+**[9] Patches drafts validés ou retirés**
+- Issue : §1.7
+- Fichiers : `patches/draft-*`
+- Effort : 2 j (build + test stealth)
+- Impact : empêche un build cassé en prod
+
+**[10] Découpage `commands.py` en sous-modules**
+- Issue : §5.2, §8.1
+- Fichiers : `launcher/bridge/commands/*.py`
+- Effort : 1 j
+- Impact : maintenabilité, surface de tests
+
+### Backlog (P4)
+
+- Refacto `Profile` dataclass en sous-dataclasses (§5.3)
+- Schema versioning `session.json` (§8.4)
+- Healthcheck endpoint (§8.6)
+- Logs rotation (§4.5)
+- Sweeper claim files orphelins (§4.7)
+- Cohérence OS/UA dans `fpgen` (§3.4)
+- Parser proxy URL-decoded (§3.2)
+- Proxy `Session()` partagée (§4.4)
+- Whitelist d'args Popen (§6.5)
+- Redaction filter logs (§6.7)
+
+---
+
+## Annexe — Fichiers analysés
+
+```
+launcher/bridge/
+├── commands.py        (903 lignes — god module)
+├── sessions.py        (~ 350 l. — état + Popen)
+├── session_runner.py  (~ 400 l. — boucle monitoring)
+├── task_worker.py     (~ 250 l. — exécute taskqueue)
+├── scheduler.py       (~ 200 l. — warmup)
+├── server.py          (~ 150 l. — HTTP bridge)
+├── cookie_export.py   (~ 200 l. — Playwright launch_persistent)
+├── webhook.py         (~ 80 l. — POST sync)
+├── tiling.py          (~ 250 l. — Win32 EnumWindows)
+├── queueit_client.py  (~ 180 l. — Queue-it API)
+
+fpgen/                 (~ 200 l.)
+proxypool/             (~ 150 l.)
+captchapool/           (~ 120 l.)
+queuepool/             (~ 100 l.)
+taskqueue/             (~ 250 l.)
+creepjsscore/          (~ 180 l.)
+humanlike/             (~ 200 l.)
+actions/               (~ 350 l. — DSL runner)
+
+additions/camoucfg/    (MaskConfig.hpp — header-only C++)
+patches/               (60+ patches alphabétiques)
+patches/draft-*        (3 drafts non testés)
+```
+
+**Total** : ~3 800 lignes Python + ~1 500 lignes TypeScript/React + 60+ patches.
+
+**Fin de l'audit.** Tous les blocs (§1–§10) couverts.
