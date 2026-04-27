@@ -143,7 +143,134 @@ Les 3 patches ajoutés à la dernière session sont préfixés `draft-` car aucu
 
 ---
 
-**Fin Turn 3a.** À suivre :
-- Turn 3b : §2 Race conditions et concurrence
+## §2. Race conditions et concurrence (🟠)
+
+### 2.1 — `taskqueue.pop_due` repose sur `os.link` cross-fs
+
+**Fichier** : `taskqueue/queue.py:172,182`
+**Sévérité** : 🟠 Majeur
+
+**Symptôme** :
+La revendication atomique d'une tâche utilise `os.link(src, claim_path)` puis `os.unlink(src)`. Si la queue (`./tasks/pending/*.json`) est sur un volume différent du dossier de claim (ex. tmpfs vs disk monté `/data`), `os.link` échoue avec `OSError: [Errno 18] Invalid cross-device link`. Conséquence : le worker abandonne, la tâche reste indéfiniment en `pending`.
+
+**Cas réel** : sous Docker, `/tmp` est tmpfs et `/data` est un volume host ⇒ casse silencieuse.
+
+**Correction recommandée** :
+- Détecter au démarrage si `os.link` fonctionne (créer puis supprimer un fichier de test).
+- Fallback `fcntl.flock` (POSIX) ou `msvcrt.locking` (Windows) sur le fichier directement.
+- À défaut : `os.rename` (atomique mais pas exclusif) + double check de présence.
+
+---
+
+### 2.2 — Trois variables `_STOP` distinctes et homonymes
+
+**Fichiers** :
+- `launcher/bridge/scheduler.py:66`
+- `launcher/bridge/session_runner.py:147`
+- `launcher/bridge/task_worker.py:40`
+
+**Sévérité** : 🟠 Majeur (piège de maintenance)
+
+**Symptôme** :
+Chaque module définit son propre `_STOP = threading.Event()` au niveau module. Le signal handler `commands.cmd_shutdown` doit se rappeler de set les **trois** indépendamment. Lors d'un futur ajout (`warmup_worker.py`, etc.), on oubliera fatalement le quatrième.
+
+**Correction recommandée** :
+- Centraliser dans `launcher/bridge/lifecycle.py` :
+  ```python
+  STOP = threading.Event()
+  ```
+- Importer depuis tous les modules. Un seul point d'arrêt global.
+
+---
+
+### 2.3 — `SessionManager._reconcile` vs `session_runner._mark_running`
+
+**Fichiers** :
+- `launcher/bridge/sessions.py:128-129` (`SessionManager._save`)
+- `launcher/bridge/session_runner.py:_mark_running` (write `state="running"`)
+
+**Sévérité** : 🟠 Majeur
+
+**Symptôme** :
+Les deux écrivent dans `session.json` via tmp+replace. Pas de fcntl/lock. Sur POSIX, `os.replace` est atomique mais **last-write-wins** : si `_reconcile` lit `state="starting"`, met à jour à `state="dead"` (croit le PID mort) pendant que le runner écrit `state="running"`, on peut perdre l'écriture.
+
+Scénario concret :
+1. T=0: runner démarre, écrit `starting` puis spawn Firefox.
+2. T=50ms: `_reconcile` (UI poll) lit `starting`, voit pas de PID, marque `dead` → écrit.
+3. T=80ms: runner écrit `running` avec PID → écrase.
+4. T=100ms: `_reconcile` revient, lit `running` → OK, mais entre 50 et 80ms l'UI a affiché "dead" pendant un cycle.
+
+**Correction recommandée** :
+- Verrou `threading.RLock` partagé via `SessionManager`.
+- Toute écriture de `session.json` passe par `manager.update(sid, **fields)` qui acquiert le lock.
+
+---
+
+### 2.4 — `humanlike/cursor.py` `_last_pos` non thread-safe
+
+**Fichier** : `humanlike/cursor.py:30,37,41,173`
+**Sévérité** : 🟠 Majeur en multi-page concurrent
+
+**Symptôme** :
+`_last_pos: dict[int, tuple[float, float]] = {}` au niveau module, indexé par `id(page)`. Aucun `Lock`. Si l'utilisateur lance 2 actions concurrentes sur 2 pages distinctes (légitime), Python protège le `dict.__setitem__` via le GIL — OK. **Mais** si deux mouvements concurrents sur la **même** page (rare mais possible si l'action DSL fait un `repeat` parallèle) lisent puis écrivent, on a une lecture stale.
+
+Plus grave : `id(page)` peut être réutilisé après garbage collection ⇒ deux pages successives partagent la position du curseur. L'humanlike démarre alors d'une position non valide pour la nouvelle page.
+
+**Correction recommandée** :
+- Stocker la position dans `page.__cursor_last_pos__` (attribut de l'objet page Playwright, garbage-collecté avec lui).
+- Sinon, `weakref.WeakKeyDictionary()`.
+
+---
+
+### 2.5 — Signal handler vs `Popen.wait()`
+
+**Fichier** : `launcher/bridge/session_runner.py:waitpid loop`
+**Sévérité** : 🟠 Majeur sur POSIX
+
+**Symptôme** :
+La boucle de surveillance fait `proc.poll()` à chaque tick (~2 s). Si l'utilisateur envoie `SIGINT` au launcher Electron, le signal se propage au session_runner qui interrompt `time.sleep` mais `proc.poll()` continue de retourner `None` (Firefox n'a pas reçu le signal car `CREATE_NEW_PROCESS_GROUP` sur Windows et `start_new_session=True` sur POSIX).
+
+Résultat : à l'arrêt du launcher, Firefox reste vivant en orphelin.
+
+**Correction recommandée** :
+- Au shutdown global, itérer `manager.list()` et envoyer `SIGTERM` à chaque PID, puis attendre 5 s avec backoff, puis `SIGKILL`.
+- Documenter que les sessions survivent volontairement au crash du launcher (feature) mais pas au shutdown propre.
+
+---
+
+### 2.6 — `cookie_export` et `webhook` partagent `requests.Session()` ?
+
+**Fichiers** :
+- `launcher/bridge/cookie_export.py:154`
+- `launcher/bridge/webhook.py:81`
+
+**Sévérité** : 🟡 Mineur (potentiel)
+
+**Symptôme** :
+Chaque module crée un `requests.post(...)` sans Session partagée. Pas de pool de connexions ⇒ TLS handshake refait à chaque appel. Pas une race condition stricto sensu, mais sous charge (50 webhooks/sec), TIME_WAIT sockets s'accumulent.
+
+**Correction recommandée** :
+- `_HTTP = requests.Session()` au niveau module avec `HTTPAdapter(pool_connections=10, pool_maxsize=20)`.
+
+---
+
+### 2.7 — `scheduler.py` warmup et `task_worker.py` peuvent lancer la même session deux fois
+
+**Fichiers** :
+- `launcher/bridge/scheduler.py` (start_session pour warmup)
+- `launcher/bridge/task_worker.py` (start_session pour run)
+
+**Sévérité** : 🟠 Majeur
+
+**Symptôme** :
+Si une tâche est planifiée à T+1h et qu'un warmup est aussi planifié à T+1h±epsilon pour la même `session_id`, les deux workers peuvent appeler `manager.start(sid)` simultanément. `SessionManager.start` vérifie `state != "running"` puis spawn — pas atomique. Les deux peuvent passer le check et lancer 2 Firefox sur le même profil → cf. §1.1.
+
+**Correction recommandée** :
+- `manager.start(sid)` doit acquérir un lock per-session (`self._locks[sid]`) avant le check d'état.
+- Refuser explicitement si `state in ("starting", "running")`.
+
+---
+
+**Fin Turn 3b.** À suivre :
 - Turn 3c : §3 Edge cases + §4 Fuites de ressources
 - Turn 4 : §5–§10 (dead code, sécurité, perf, archi, upstream, recommandations)
