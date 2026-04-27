@@ -271,6 +271,204 @@ Si une tâche est planifiée à T+1h et qu'un warmup est aussi planifié à T+1h
 
 ---
 
-**Fin Turn 3b.** À suivre :
-- Turn 3c : §3 Edge cases + §4 Fuites de ressources
-- Turn 4 : §5–§10 (dead code, sécurité, perf, archi, upstream, recommandations)
+## §3. Edge cases non gérés (🟠/🟡)
+
+### 3.1 — Profil sans `prefs.js` après crash
+**Fichier** : `launcher/bridge/sessions.py` (init profile)
+**Sévérité** : 🟠 Majeur
+
+Si Firefox crashe pendant l'écriture de `prefs.js`, on retrouve un fichier de 0 octet. Au prochain `start`, Firefox réinitialise toutes les prefs (locale par défaut, fingerprint perdu). Le runner ne détecte pas — il croit que le profil est sain.
+
+**Correction** : checksum/taille minimale sur `prefs.js` au démarrage. Si invalide → restauration depuis `prefs.js.bak` (Firefox en crée un automatiquement).
+
+---
+
+### 3.2 — Proxy avec mot de passe contenant `@` ou `:`
+**Fichier** : `proxypool/parser.py`
+**Sévérité** : 🟠 Majeur
+
+Format `user:pass@host:port` non échappé. Un mot de passe contenant `@` (`P@ssw0rd`) casse le split. Pas de URL-decode.
+
+**Correction** : parser via `urllib.parse.urlsplit("http://" + raw)` qui gère correctement les credentials.
+
+---
+
+### 3.3 — `proxypool` round-robin sans persistance
+**Fichier** : `proxypool/store.py`
+**Sévérité** : 🟡 Mineur
+
+L'index courant est en mémoire. Au restart, on revient à 0 → premier proxy hammeré. Avec 1 000 sessions et 10 proxies, le proxy #0 prend 100 sessions au boot.
+
+**Correction** : persister le pointeur dans `state.json`, ou utiliser un hash modulo `session_id`.
+
+---
+
+### 3.4 — `fpgen.profile` ne valide pas la cohérence OS/UA
+**Fichier** : `fpgen/profile.py:147`
+**Sévérité** : 🟠 Majeur (fingerprint detectable)
+
+Rien n'empêche de générer `os="windows"` + `userAgent="Mozilla/5.0 (Macintosh; ...)"`. Les sites de fingerprinting (FpJS) recoupent et flag.
+
+**Correction** : `__post_init__` qui vérifie cohérence (OS dans UA, plateforme JS, fonts par OS, timezone par geo IP du proxy).
+
+---
+
+### 3.5 — `humanlike.cursor` mouvement hors viewport
+**Fichier** : `humanlike/cursor.py:173`
+**Sévérité** : 🟡 Mineur
+
+La courbe de Bézier peut sortir du viewport (control points trop éloignés). Playwright clamp silencieusement, mais le flot de coordonnées devient suspicieux (positions hors écran).
+
+**Correction** : clamp les control points dans `[0, viewport_width-1] × [0, viewport_height-1]`.
+
+---
+
+### 3.6 — `actions.repeat` sans limite de profondeur
+**Fichier** : `actions/runner.py`
+**Sévérité** : 🟠 Majeur (DoS auto-infligé)
+
+Une action `repeat` imbriquée sans condition de sortie boucle infiniment. Aucun max_iterations global.
+
+**Correction** : `MAX_ACTIONS_PER_RUN = 10_000`, lever exception passé ce seuil.
+
+---
+
+### 3.7 — `creepjsscore` parser fragile aux changements de DOM
+**Fichier** : `creepjsscore/scorer.py`
+**Sévérité** : 🟡 Mineur
+
+Le scoring extrait via `page.locator("#fingerprint")` ou similaire. Si CreepJS change son CSS-id, retour `None` silencieux → score=0 réputé "fail" alors que c'est un bug du scraper.
+
+**Correction** : lever `CreepJSParseError` au lieu de retourner `None`. Logger le HTML brut pour diagnostic.
+
+---
+
+### 3.8 — `taskqueue` tâche sans `id`
+**Fichier** : `taskqueue/queue.py`
+**Sévérité** : 🟡 Mineur
+
+`push(task)` n'exige pas que `task["id"]` soit unique. Deux push avec le même id → un seul fichier. Silencieux.
+
+**Correction** : si `id` existe, `raise DuplicateTaskError`. Ou auto-uuid si manquant.
+
+---
+
+### 3.9 — `queuepool` (Queue-it) sans gestion du captcha
+**Fichier** : `launcher/bridge/queueit_client.py`
+**Sévérité** : 🟠 Majeur
+
+Si Queue-it présente un captcha pendant le wait (cas connu sur Nike SNKRS), le client poll JSON ignore le challenge HTML et boucle sur 200 OK avec body inattendu.
+
+**Correction** : détecter `Content-Type: text/html` ou `redirect_url` pointant vers `/challenge`, basculer en mode browser (lancer une page Camoufox sur l'URL captcha).
+
+---
+
+### 3.10 — `auto_tile` avec écran portrait
+**Fichier** : `launcher/bridge/tiling.py`
+**Sévérité** : 🟡 Mineur
+
+La grille assume `screen_width > screen_height`. Sur un moniteur portrait (1080×1920), le calcul `cols = ceil(sqrt(n))` produit des tuiles très larges et basses.
+
+**Correction** : `cols, rows = tile_grid(n, aspect=screen_width/screen_height)` qui adapte au ratio.
+
+---
+
+### 3.11 — `cookie_export` cookies HTTPOnly invisibles côté JS
+**Fichier** : `launcher/bridge/cookie_export.py:80`
+**Sévérité** : 🟠 Majeur
+
+`page.evaluate("document.cookie")` rate les HTTPOnly. Pour un site comme Cloudflare (`__cf_bm`, `cf_clearance` souvent HTTPOnly), l'export est incomplet → la session restaurée échoue.
+
+**Correction** : utiliser `context.cookies()` (Playwright API native, voit HTTPOnly).
+
+---
+
+## §4. Fuites de ressources (🟠)
+
+### 4.1 — `humanlike/cursor.py` `_last_pos` jamais purgé
+**Fichier** : `humanlike/cursor.py:30`
+**Sévérité** : 🟠 Majeur (fuite mémoire long-running)
+
+`_last_pos: dict[int, tuple]` accumule une entrée par `id(page)` ouverte. Aucun cleanup à la fermeture de la page. Sur un worker qui ouvre 10 000 pages/jour, le dict grossit indéfiniment.
+
+**Correction** : `weakref.WeakKeyDictionary` (purge auto quand page collectée). Cf. §2.4.
+
+---
+
+### 4.2 — `Popen` sans `wait()` pour les processus terminés
+**Fichier** : `launcher/bridge/sessions.py:255` + boucle de monitoring
+**Sévérité** : 🟠 Majeur sur Linux
+
+Quand Firefox exit, le runner détecte via `proc.poll()` mais ne fait pas `proc.wait()`. Le process reste **zombie** jusqu'au shutdown du runner. Avec 50 sessions/jour, on accumule 50 zombies dans `ps -ef | grep <defunct>`.
+
+**Correction** : appeler `proc.wait(timeout=1)` après détection de exit, ou wrapper dans `subprocess.run` géré.
+
+---
+
+### 4.3 — `page.context` non fermé après `cookie_export`
+**Fichier** : `launcher/bridge/cookie_export.py:140-180`
+**Sévérité** : 🟠 Majeur
+
+Le `try`/`finally` n'a pas de `context.close()` explicite — uniquement `playwright.stop()`. Si une exception remonte avant `playwright.stop()`, Firefox reste actif.
+
+**Correction** : `with sync_playwright() as p:` + `with p.firefox.launch_persistent_context(...) as ctx:`.
+
+---
+
+### 4.4 — `requests.post` sans `Session` → fuite de sockets TIME_WAIT
+**Fichiers** :
+- `launcher/bridge/webhook.py:81`
+- `launcher/bridge/cookie_export.py:154`
+- `launcher/bridge/queueit_client.py`
+
+**Sévérité** : 🟡 Mineur
+
+Cf. §2.6. À fort débit, on peut épuiser les ports éphémères (Linux par défaut 32 768–60 999, soit ~28k ports). Sur 60s, 5/s × 60 = 300 sockets — OK. Mais à 50/s sustained, on touche le mur en ~10 min.
+
+**Correction** : `requests.Session()` partagée par module.
+
+---
+
+### 4.5 — Logs JSONL non rotés
+**Fichier** : `launcher/bridge/logger.py` (à confirmer)
+**Sévérité** : 🟠 Majeur
+
+`session.log` et `runner.log` sont append-only sans rotation. Une session qui tourne 1 mois génère plusieurs Go.
+
+**Correction** : `RotatingFileHandler(maxBytes=10MB, backupCount=5)`.
+
+---
+
+### 4.6 — `tiling.py` SetWindowPos sans GetLastError
+**Fichier** : `launcher/bridge/tiling.py`
+**Sévérité** : 🟡 Mineur
+
+Si `SetWindowPos` échoue (HWND fermé entre énumération et call), pas de log. Le tiling silencieusement skip une fenêtre.
+
+**Correction** : log warning si retour 0, `GetLastError()` pour diagnostic.
+
+---
+
+### 4.7 — `taskqueue` claim files orphelins après crash
+**Fichier** : `taskqueue/queue.py:172,182`
+**Sévérité** : 🟠 Majeur
+
+Si le worker crash entre `os.link(claim)` et le traitement, le fichier reste dans `./tasks/claimed/` indéfiniment. Tâche perdue.
+
+**Correction** : sweeper périodique : claims plus vieux que `task_timeout` (ex. 1h) → relâchés vers `pending/`.
+
+---
+
+### 4.8 — Threads daemon sans join
+**Fichiers** : `scheduler.py`, `task_worker.py`, `session_runner.py`
+
+**Sévérité** : 🟡 Mineur
+
+Threads démarrés en `daemon=True` sans `join()` au shutdown. Sur kill propre, les écritures en cours de `session.json` peuvent être tronquées.
+
+**Correction** : registry global de threads, `for t in threads: t.join(timeout=5)` au shutdown.
+
+---
+
+**Fin Turn 3c.** À suivre :
+- Turn 4 : §5–§10 (dead code, sécurité, perf, archi, upstream issues, recommandations Top 10)
