@@ -201,6 +201,38 @@ def test_repeat_runs_n_times() -> None:
     assert all(r.ok for r in results)
 
 
+def test_repeat_aborts_at_action_limit(monkeypatch) -> None:
+    """A huge repeat count must not lock the runner — the executor caps
+    total actions executed and surfaces ActionLimitExceeded as a failed
+    result, then aborts the rest of the script."""
+    import actions.dsl as dsl
+    monkeypatch.setattr(dsl, "MAX_ACTIONS_PER_RUN", 50)
+    page = _mk_page()
+    script = _script({
+        "type": "repeat", "times": 1_000_000,  # would block forever uncapped
+        "actions": [{"type": "click", "selector": "#b"}],
+    })
+    results = run_script(page, script)
+    # Page.click is called fewer times than the repeat count.
+    assert page.click.call_count < 100
+    # At least one result records the limit error.
+    assert any(
+        r.error and "ActionLimitExceeded" in r.error
+        for r in results
+    )
+
+
+def test_action_limit_does_not_trigger_for_normal_scripts() -> None:
+    """A normal script of a few hundred actions runs cleanly — the cap
+    only fires in pathological cases."""
+    page = _mk_page()
+    actions_list = [{"type": "click", "selector": f"#b{i}"} for i in range(200)]
+    results = run_script(page, ActionScript(name="t", actions=actions_list))
+    assert page.click.call_count == 200
+    assert all(r.ok for r in results)
+    assert not any(r.error and "ActionLimitExceeded" in (r.error or "") for r in results)
+
+
 def test_if_then_branch_runs_when_condition_true() -> None:
     page = _mk_page()
     page.query_selector.return_value = object()  # element exists

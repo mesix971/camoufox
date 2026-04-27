@@ -65,6 +65,21 @@ _SCHEMA: Dict[str, Dict[str, List[str]]] = {
 ACTION_TYPES = tuple(_SCHEMA.keys())
 
 
+MAX_ACTIONS_PER_RUN = 10_000
+"""Hard cap on the number of actions executed in a single ``run_script`` call.
+
+Protects against runaway loops in user-authored scripts (a typo'd
+``repeat`` count, an unbounded condition, or nested loops whose product
+explodes). Hitting the cap aborts the run with ``ActionLimitExceeded``
+and surfaces a clear error in the result list rather than freezing
+the runner indefinitely.
+"""
+
+
+class ActionLimitExceeded(RuntimeError):
+    """Raised when a script tries to execute more than MAX_ACTIONS_PER_RUN actions."""
+
+
 # ---------------------------------------------------------------------------
 # Types
 # ---------------------------------------------------------------------------
@@ -231,7 +246,8 @@ def run_script(
     """
     hl = _resolve_humanlike(humanlike_module)
     results: List[ActionResult] = []
-    _execute(page, script.actions, results, hl, abort_flag={"abort": False})
+    abort_flag = {"abort": False, "count": 0}
+    _execute(page, script.actions, results, hl, abort_flag=abort_flag)
     return results
 
 
@@ -240,11 +256,24 @@ def _execute(
     actions: List[Dict[str, Any]],
     results: List[ActionResult],
     hl: Any,
-    abort_flag: Dict[str, bool],
+    abort_flag: Dict[str, Any],
 ) -> None:
     for action in actions:
         if abort_flag["abort"]:
             return
+        if abort_flag["count"] >= MAX_ACTIONS_PER_RUN:
+            results.append(ActionResult(
+                action=dict(action) if isinstance(action, dict) else {"type": None},
+                ok=False,
+                duration_ms=0.0,
+                error=(
+                    f"ActionLimitExceeded: more than {MAX_ACTIONS_PER_RUN} "
+                    f"actions executed; aborting (likely an unbounded loop)"
+                ),
+            ))
+            abort_flag["abort"] = True
+            return
+        abort_flag["count"] += 1
         result = _run_one(page, action, hl, results, abort_flag)
         results.append(result)
         if not result.ok and action.get("on_error", "abort") == "abort":
@@ -257,7 +286,7 @@ def _run_one(
     action: Dict[str, Any],
     hl: Any,
     results: List[ActionResult],
-    abort_flag: Dict[str, bool],
+    abort_flag: Dict[str, Any],
 ) -> ActionResult:
     t = action.get("type") if isinstance(action, dict) else None
     start = time.monotonic()
