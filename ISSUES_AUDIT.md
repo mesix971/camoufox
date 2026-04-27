@@ -652,6 +652,173 @@ Si les fichiers d'actions sont stockés dans un dossier partagé (ex. NAS d'équ
 
 ---
 
-**Fin Turn 4a.** À suivre :
-- Turn 4b : §7 Performance + §8 Architecture
+## §7. Performance (🟠/🟡)
+
+### 7.1 — Polling 2s pour 50 sessions = 25 stat() / sec
+**Fichier** : `launcher/bridge/sessions.py` `_reconcile`
+**Sévérité** : 🟡 Mineur
+
+Chaque cycle, le manager fait `os.stat(session.json)` + `os.kill(pid, 0)` pour chaque session. À 50 sessions × 0.5 Hz = 25 syscalls/s. Pas critique, mais sur Windows les syscalls fs sont 10× plus chers que Linux.
+
+**Correction** : event-driven via `inotify` (Linux) / `ReadDirectoryChangesW` (Windows) sur `./profiles/`. Fallback poll à 5s.
+
+---
+
+### 7.2 — `page.url` interrogé toutes les 2s par session
+**Fichier** : `launcher/bridge/session_runner.py:374`
+**Sévérité** : 🟠 Majeur
+
+`page.url` traverse Juggler → IPC vers le content process. Si la page est sur un site lent (ex. Cloudflare en cours de challenge), l'appel peut bloquer plusieurs centaines de ms. Multiplié par 50 sessions, le runner principal lag.
+
+**Correction** :
+- Délégation par session : un thread par session pour son monitoring (déjà partiellement le cas).
+- Cache local de `last_known_url` mis à jour par les events Juggler (`Page.frameNavigated`).
+
+---
+
+### 7.3 — `creepjsscore` ré-instancie un browser par run
+**Fichier** : `creepjsscore/scorer.py`
+**Sévérité** : 🟡 Mineur
+
+Chaque appel à `score(profile)` lance un nouveau Camoufox, attend chargement CreepJS (~30s), parse, ferme. Pour benchmarker 100 profils, 50 min.
+
+**Correction** : pool de browsers réutilisables (1 browser → N pages → N profils via context swap).
+
+---
+
+### 7.4 — `humanlike.cursor` calcule la trajectoire complète d'avance
+**Fichier** : `humanlike/cursor.py`
+**Sévérité** : 🟡 Mineur
+
+La courbe Bezier est échantillonnée en N points (~50–100), tous calculés avant le premier `mouse.move`. Sur des trajectoires longues (full-screen drag), pic CPU.
+
+**Correction** : générator yield-on-the-fly, calcul lazy au rythme du `await sleep(dt)`.
+
+---
+
+### 7.5 — `fpgen.profile` ne cache pas le pool BrowserForge
+**Fichier** : `fpgen/profile.py`
+**Sévérité** : 🟡 Mineur
+
+Si BrowserForge charge sa base statistique à chaque appel (`from browserforge.fingerprints import FingerprintGenerator()`), c'est ~10 MB lus chaque fois.
+
+**Correction** : `_GENERATOR = FingerprintGenerator()` au niveau module, lazy.
+
+---
+
+### 7.6 — `tiling.py` re-énumère toutes les fenêtres à chaque tile
+**Fichier** : `launcher/bridge/tiling.py`
+**Sévérité** : 🟡 Mineur
+
+`EnumWindows` itère toutes les fenêtres du desktop (~300 sur un Windows utilisé). Pour 50 sessions, on enumère 50× → 15 000 itérations.
+
+**Correction** : un seul `EnumWindows` qui retourne dict `pid → hwnd`, puis lookup.
+
+---
+
+### 7.7 — Logs JSONL avec `json.dumps(indent=2)`
+**Fichier** : à confirmer
+**Sévérité** : 🟡 Mineur
+
+Si les logs sont indentés, taille ×3 et IO disque proportionnel.
+
+**Correction** : `json.dumps(obj, separators=(",", ":"))` en logs prod, indent uniquement en dev.
+
+---
+
+### 7.8 — Pas de circuit breaker sur les webhooks
+**Fichier** : `launcher/bridge/webhook.py`
+**Sévérité** : 🟠 Majeur
+
+Si Discord est en panne, chaque appel timeout 5s. À 1 event/s, 1 thread bloqué en permanence par le retry naïf.
+
+**Correction** : circuit breaker ouvert 60s après 3 échecs consécutifs, half-open ensuite.
+
+---
+
+## §8. Architecture / dette technique
+
+### 8.1 — Couplage fort `commands.py` ↔ `SessionManager`
+**Sévérité** : 🟡 Mineur
+
+`commands.py` accède directement à `manager._state` dans certains handlers. Casse l'encapsulation.
+
+**Correction** : exposer uniquement `manager.list()`, `manager.get(sid)`, `manager.update()`. Marquer `_state` comme privé strict.
+
+---
+
+### 8.2 — Pas de tests unitaires sur les modules Python
+**Sévérité** : 🟠 Majeur (dette)
+
+Aucun `test_*.py` dans `fpgen/`, `proxypool/`, `taskqueue/`, `humanlike/`. Régression silencieuse à chaque refactor.
+
+**Correction** : `pytest` + `tests/` minimum :
+- `test_proxypool.py` (parser, round-robin)
+- `test_taskqueue.py` (push/claim/pop_due, race avec 2 workers)
+- `test_humanlike.py` (Bezier dans viewport)
+- `test_fpgen.py` (cohérence OS/UA)
+
+---
+
+### 8.3 — Pas de séparation domain / infrastructure
+**Sévérité** : 🟡 Mineur
+
+`SessionManager` mélange logique métier (états valides) et IO (lecture session.json, Popen Firefox). Difficile à tester sans vrai disque.
+
+**Correction** : interface `SessionStorage` (memory/file), injection de dépendance.
+
+---
+
+### 8.4 — Pas de schema versioning sur `session.json`
+**Sévérité** : 🟠 Majeur
+
+Si le format évolue (nouveau champ obligatoire), les sessions existantes deviennent invalides. Aucun champ `schema_version`.
+
+**Correction** : `{"schema_version": 1, ...}` + migration automatique au load.
+
+---
+
+### 8.5 — Frontend Electron : Zustand store global non typé strictement
+**Fichier** : `launcher/electron/src/store/`
+**Sévérité** : 🟡 Mineur (à vérifier)
+
+Si le store mélange data backend et UI state (modals, drawer ouvert), refresh → fuites d'état UI dans les snapshots.
+
+**Correction** : split en `useSessionsStore`, `useUIStore`.
+
+---
+
+### 8.6 — Pas de healthcheck du bridge
+**Fichier** : `launcher/bridge/server.py`
+**Sévérité** : 🟡 Mineur
+
+L'UI Electron ne sait pas si le bridge est vivant sans tenter une commande. Pas d'endpoint `GET /health`.
+
+**Correction** : route `/health` qui retourne `{"ok": true, "uptime": N, "sessions": M}`.
+
+---
+
+### 8.7 — Patches `additions/juggler/` sans test de régression
+**Sévérité** : 🟠 Majeur
+
+Les modifs Juggler (sandboxing, `navigator.webdriver`) peuvent régresser à chaque upgrade Firefox sans qu'on s'en rende compte.
+
+**Correction** : suite Playwright minimum qui assert :
+- `navigator.webdriver === undefined`
+- `window.chrome === undefined` (ou structure attendue)
+- Pas de `__playwright_*` globals leaks
+
+---
+
+### 8.8 — Pas de versioning des patches
+**Fichier** : `patches/`
+**Sévérité** : 🟡 Mineur
+
+Les patches n'ont pas de header `# Patch-Version: 1` ni de `# Targets-Firefox: 142.0.1`. Difficile de tracker quelles versions ont été testées avec quel patch.
+
+**Correction** : header standardisé en commentaire en tête de chaque `.patch`.
+
+---
+
+**Fin Turn 4b.** À suivre :
 - Turn 4c : §9 Issues upstream + §10 Top 10 recommandations
