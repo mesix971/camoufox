@@ -236,6 +236,55 @@ class TaskQueue:
 
         return None
 
+    def sweep_stale_claims(self, max_age_seconds: float = 3600.0) -> List[str]:
+        """Reclaim tasks whose worker died mid-execution.
+
+        A worker that crashes between ``_try_claim()`` and ``release_lock()``
+        leaves a lockfile behind. The task stays in ``RUNNING`` forever and
+        no other worker will pick it up — silent task loss.
+
+        This sweeper scans for lockfiles older than ``max_age_seconds``,
+        releases them, and rolls the underlying task back to ``QUEUED`` (or
+        marks it terminally ``FAILED`` if it has used up its retries) so the
+        queue can make progress again.
+
+        Returns the list of task ids that were swept.
+        """
+        if max_age_seconds < 0:
+            raise ValueError("max_age_seconds must be >= 0")
+        cutoff = _utc_now().timestamp() - max_age_seconds
+        swept: List[str] = []
+        for lock_path in self.root.glob(f"{LOCK_PREFIX}*"):
+            try:
+                age = lock_path.stat().st_mtime
+            except FileNotFoundError:
+                continue
+            if age > cutoff:
+                continue
+            task_id = lock_path.name[len(LOCK_PREFIX):]
+            try:
+                task = self.get(task_id)
+            except KeyError:
+                # Task was deleted but lock leaked — drop the lock.
+                lock_path.unlink(missing_ok=True)
+                continue
+            task.error = (
+                f"worker presumed dead (claim file stale "
+                f"by {int(_utc_now().timestamp() - age)}s)"
+            )
+            if task.can_retry():
+                # Roll back to QUEUED with a small delay so the next worker
+                # doesn't immediately re-grab while the old one is still
+                # writing its death rattle.
+                self.reschedule(task, delay_seconds=5.0)
+            else:
+                task.status = TaskStatus.FAILED.value
+                task.finished_at = _iso(_utc_now())
+                self.save(task)
+                lock_path.unlink(missing_ok=True)
+            swept.append(task_id)
+        return swept
+
     def release_lock(self, task_id: str) -> None:
         """Release the claim lock for a task (typically on completion)."""
         lock = self._lock_path(task_id)
