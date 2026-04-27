@@ -274,4 +274,96 @@
 - 🟡 Mineur : 4 (§6.2, §6.3, §6.6, §6.7)
 - ⚪ Faux positif : 4 (§6.1, §6.4, §6.5, §6.8)
 
-**Fin T2d.** Prochain : T2e §7 + §8 + §9 + §10 + bilan global.
+**Fin T2d.** Prochain : T2e1 §7 + §8.
+
+---
+
+## §7. Performance (audit)
+
+### §7.1 — Polling 2s pour 50 sessions = 25 stat()/sec
+**Vérification** : `sessions.py:140-153` (`list()`) fait `glob` + `_reconcile` (qui fait `_pid_alive`). À 50 sessions × 0.5 Hz = 25/s. Coût négligeable sur Linux. Sur Windows, `OpenProcess` est plus cher mais pas critique.
+**Classement final** : 🟡 **MINEUR** — overhead négligeable jusqu'à 200 sessions.
+
+### §7.2 — `page.url` interrogé toutes les 2s
+**Vérification** : `session_runner.py:374` confirme `_ = page.url`. Mais c'est dans un sous-process dédié à UNE session (pas 50). Le coût est local à cette session uniquement.
+**Classement final** : 🟡 **MINEUR** — l'audit a sur-estimé l'impact (multiplie par 50, mais c'est 1 seul process par session).
+
+### §7.3 — `creepjsscore` browser par run
+**Vérification** : design pour benchmarking ponctuel. Pas pour batch.
+**Classement final** : 🟡 **MINEUR** — usage occasionnel.
+
+### §7.4 — Bezier curve calculée d'avance
+**Vérification** : `humanlike/cursor.py:89-97` — `Bezier.humanize` pré-calcule. Coût négligeable (quelques μs par courbe).
+**Classement final** : 🟡 **MINEUR**.
+
+### §7.5 — `fpgen.profile` cache BrowserForge
+**Vérification** : à confirmer dans `fpgen/generator.py`. Plausible.
+**Classement final** : 🟡 **MINEUR** — startup time uniquement.
+
+### §7.6 — `tiling.py` re-énumère fenêtres
+**Vérification** : `tiling.py` 2KB, à confirmer. Vraisemblable.
+**Classement final** : 🟡 **MINEUR**.
+
+### §7.7 — `json.dumps(indent=2)`
+**Vérification** : `sessions.py:62`, `scheduler.py:62`, `taskqueue/queue.py` utilisent indent=2. Volumineux pour des fichiers d'état.
+**Classement final** : 🟡 **MINEUR** — avantage debugging > coût IO.
+
+### §7.8 — Pas de circuit breaker webhooks
+**Vérification** : `webhook.py:80-84` — try/except simple, pas de retry/backoff. Si Discord 429, chaque appel paie 5 s.
+**Classement final** : 🟡 **MINEUR** — affecte une session à la fois (pas le runner global).
+
+---
+
+**Bilan §7 (8 entrées)** : 🟡 Mineur : 8 (zéro critique, zéro majeur).
+
+---
+
+## §8. Architecture / dette technique (audit)
+
+### §8.1 — Couplage `commands.py` ↔ `SessionManager`
+**Vérification** : `scheduler.py:111` importe `_session_mgr` depuis commands (underscore = privé). Confirme couplage fort. Acceptable pour un projet de cette taille.
+**Classement final** : 🟡 **MINEUR**.
+
+### §8.2 — Pas de tests unitaires
+**Vérification** : `find -name "test_*.py"` montre :
+- `actions/tests/test_dsl.py`, `test_recorder.py`, `test_store.py`
+- `fpgen/tests/test_adapter.py`, `test_consistency.py`, `test_generator.py`, `test_jvv_schema.py`, `test_p4.py`, `test_store.py`
+- `humanlike/tests/test_bezier.py`, `test_cursor.py`, `test_typing.py`
+- `launcher/bridge/tests/test_cli.py`, `test_commands.py`, `test_commands_finitions.py`, `test_sessions.py`
+- `proxypool/tests/test_*.py` (7 fichiers)
+- `taskqueue/tests/test_queue.py`, `test_task.py`
+
+**Tests existent dans tous les modules.** L'audit était factuellement faux.
+**Classement final** : ⚪ **FAUX POSITIF** flagrant.
+
+### §8.3 — Pas de séparation domain/infra
+**Vérification** : confirmé. Conscient design choice pour un projet pragmatique.
+**Classement final** : 🟡 **MINEUR**.
+
+### §8.4 — Pas de schema versioning sur `session.json`
+**Vérification** : `sessions.py:42-67` — la dataclass `Session` n'a pas de champ `schema_version`. Confirmé.
+**Classement final** : 🟡 **MINEUR** — pas de migrations passées, pas urgent.
+
+### §8.5 — Zustand store non typé strict
+**Vérification** : non lu.
+**Classement final** : 🟡 **MINEUR**.
+
+### §8.6 — Pas de healthcheck du bridge
+**Vérification** : pas de bridge HTTP (cf. §6.1). N/A.
+**Classement final** : ⚪ **FAUX POSITIF**.
+
+### §8.7 — Patches Juggler sans tests régression
+**Vérification** : `tests/async/` contient des tests Playwright. Pas de tests dédiés Juggler stealth visibles, mais infrastructure de tests présente.
+**Classement final** : 🟡 **MINEUR** — tests existants, juste pas spécialisés stealth.
+
+### §8.8 — Pas de versioning des patches
+**Vérification** : aucun header standardisé dans `patches/*.patch`. Confirmé.
+**Classement final** : 🟡 **MINEUR**.
+
+---
+
+**Bilan §8 (8 entrées)** :
+- 🟡 Mineur : 6
+- ⚪ Faux positif : 2 (§8.2, §8.6)
+
+**Fin T2e1.** Prochain : T2e2 §9 + §10 + bilan global.
