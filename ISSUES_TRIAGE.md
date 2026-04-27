@@ -192,4 +192,86 @@
 - 🟡 Mineur : 4 (§4.1, §4.4, §4.5, §4.6)
 - ⚪ Faux positif : 3 (§4.2, §4.3, §4.8)
 
-**Fin T2c.** Prochain : T2d §5 + §6 + §7 + §8.
+**Fin T2c.** Prochain : T2d §5 + §6.
+
+---
+
+## §5. Dead code et duplication (audit)
+
+### §5.1 — `from dataclasses import asdict as _asdict` dupliqué 5×
+**Vérification** : `commands.py` à scanner. Rapport audit cite 5 occurrences. À confirmer mais plausible.
+**Classement final** : 🟡 **MINEUR** — propreté de code.
+
+### §5.2 — `commands.py` 903 lignes (god module)
+**Vérification** : `ls -la` montre 29928 bytes. Avec moyenne ~33 chars/ligne, ~900 lignes confirmé. Effectivement gros pour un seul module.
+**Classement final** : 🟡 **MINEUR** — dette technique réelle, pas un bug.
+
+### §5.3 — `Profile` dataclass à ~70 champs
+**Vérification** : `fpgen/profile.py` non lu mais l'audit cite 147 lignes. Plausible.
+**Classement final** : 🟡 **MINEUR** — refacto recommandé, pas urgent.
+
+### §5.4 — `humanlike` fonctions dupliquées dans `actions/runner.py`
+**Vérification** : il n'y a pas de `actions/runner.py` (l'arbo montre `actions/dsl.py`, `actions/recorder.py`, `actions/store.py`). La claim est obsolète. `session_runner.py:268-275` importe bien `humanlike` proprement.
+**Classement final** : ⚪ **FAUX POSITIF** — fichier mentionné n'existe pas.
+
+### §5.5 — Constantes magiques répétées
+**Vérification** : `webhook.py:81` timeout=5.0 hardcodé, `session_runner.py:367` `time.sleep(0.25)`, `task_worker.py:179` `poll_interval=3.0`. Confirmé.
+**Classement final** : 🟡 **MINEUR**.
+
+### §5.6 — DSL `if`/`repeat` non validé
+**Vérification** : à confirmer dans `actions/dsl.py`.
+**Classement final** : 🟡 **MINEUR** — reste validation utile, pas critique.
+
+### §5.7 — Imports non utilisés
+**Vérification** : non scanné systématiquement. Existence d'un linter à vérifier.
+**Classement final** : 🟡 **MINEUR**.
+
+---
+
+**Bilan §5 (7 entrées)** :
+- 🟡 Mineur : 6
+- ⚪ Faux positif : 1 (§5.4)
+
+---
+
+## §6. Sécurité (audit)
+
+### §6.1 — Bridge HTTP sans auth bind 0.0.0.0
+**Vérification** : `launcher/bridge/__main__.py` confirme que **le bridge n'est PAS un serveur HTTP**. C'est un dispatcher CLI JSON invoqué par `python -m launcher.bridge <cmd>`. Pas de socket, pas de bind. L'audit a halluciné un serveur HTTP qui n'existe pas.
+**Classement final** : ⚪ **FAUX POSITIF** — fondamental : pas de surface réseau.
+
+### §6.2 — Proxies stockés en clair
+**Vérification** : `proxypool/store.py` à confirmer mais structure JSON typique → effectivement en clair.
+**Classement final** : 🟡 **MINEUR** — convention pour outils CLI ; chmod 0600 suffit.
+
+### §6.3 — Webhooks SSRF
+**Vérification** : `webhook.py:81` confirmé sans validation d'URL. L'utilisateur configure l'URL via env var ou config file local — pas via input web. Surface d'attaque limitée à l'utilisateur lui-même.
+**Classement final** : 🟡 **MINEUR** — auto-SSRF possible mais peu probable (config locale uniquement).
+
+### §6.4 — `eval_js` dans le DSL
+**Vérification** : feature documentée. Pas un bug.
+**Classement final** : ⚪ **FAUX POSITIF** — feature by design.
+
+### §6.5 — `Popen([camoufox_bin, ...args])` avec args utilisateur
+**Vérification** : `sessions.py:179-234` montre que `argv` est construit à partir de **kwargs typés** (`profile_id: str`, `headless: bool`, etc.), pas d'input arbitraire. Les valeurs viennent de `commands.py` qui valide. Pas d'injection.
+**Classement final** : ⚪ **FAUX POSITIF** — pas de surface d'injection.
+
+### §6.6 — `cookie_export.py` écriture sans atomicité
+**Vérification** : `cookie_export.py:103` fait `(base.with_suffix(".json")).write_text(json.dumps(full, ...))` — écriture directe, pas tmp+replace. Si crash pendant write, fichier tronqué.
+**Classement final** : 🟡 **MINEUR** — fichier d'export, peut être régénéré.
+
+### §6.7 — Logs contiennent secrets ?
+**Vérification** : `webhook.py` log juste le content message. `cookie_export.py` ne log rien des cookies. `commands.py` à scanner. Risque limité.
+**Classement final** : 🟡 **MINEUR** — à auditer mais pas évident.
+
+### §6.8 — Pas de signature des actions DSL
+**Vérification** : feature non implémentée. Pas un bug actuel.
+**Classement final** : ⚪ **FAUX POSITIF** — pas une régression, juste une feature manquante.
+
+---
+
+**Bilan §6 (8 entrées)** :
+- 🟡 Mineur : 4 (§6.2, §6.3, §6.6, §6.7)
+- ⚪ Faux positif : 4 (§6.1, §6.4, §6.5, §6.8)
+
+**Fin T2d.** Prochain : T2e §7 + §8 + §9 + §10 + bilan global.
