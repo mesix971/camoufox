@@ -7,7 +7,10 @@ import os
 import subprocess
 import sys
 
+import pytest
+
 from launcher.bridge.sessions import (
+    ProfileBusyError,
     Session,
     SessionManager,
     SessionStatus,
@@ -102,6 +105,46 @@ def test_prune_stopped(tmp_path) -> None:
     n = mgr.prune_stopped()
     assert n == 1
     assert {s.id for s in mgr.list()} == {"run"}
+
+
+def test_active_profile_ids_includes_live(tmp_path) -> None:
+    mgr = SessionManager(tmp_path)
+    live = Session(id="L", pid=os.getpid(), profile_id="P-live",
+                   status=SessionStatus.RUNNING.value)
+    dead = Session(id="D", pid=999999, profile_id="P-dead",
+                   status=SessionStatus.RUNNING.value)
+    stopped = Session(id="S", pid=os.getpid(), profile_id="P-stopped",
+                      status=SessionStatus.STOPPED.value)
+    mgr.save(live)
+    mgr.save(dead)
+    mgr.save(stopped)
+    active = mgr.active_profile_ids()
+    assert active == {"P-live"}
+
+
+def test_assert_profile_free_raises_when_busy(tmp_path) -> None:
+    mgr = SessionManager(tmp_path)
+    live = Session(id="L", pid=os.getpid(), profile_id="P1",
+                   status=SessionStatus.RUNNING.value)
+    mgr.save(live)
+    with pytest.raises(ProfileBusyError):
+        mgr.assert_profile_free("P1")
+
+
+def test_assert_profile_free_ok_when_free(tmp_path) -> None:
+    mgr = SessionManager(tmp_path)
+    # No sessions saved → profile is free.
+    mgr.assert_profile_free("anything")
+
+
+def test_assert_profile_free_after_session_stops(tmp_path) -> None:
+    mgr = SessionManager(tmp_path)
+    # PID 999999 is dead → reconcile will mark stopped on list, but
+    # active_profile_ids should already exclude it.
+    s = Session(id="X", pid=999999, profile_id="P-old",
+                status=SessionStatus.RUNNING.value)
+    mgr.save(s)
+    mgr.assert_profile_free("P-old")  # must NOT raise
 
 
 def test_tail_log(tmp_path) -> None:
