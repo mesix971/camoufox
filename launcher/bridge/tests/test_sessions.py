@@ -15,6 +15,7 @@ from launcher.bridge.sessions import (
     SessionManager,
     SessionStatus,
     _pid_alive,
+    _pid_start_time,
 )
 
 
@@ -133,18 +134,73 @@ def test_assert_profile_free_raises_when_busy(tmp_path) -> None:
 
 def test_assert_profile_free_ok_when_free(tmp_path) -> None:
     mgr = SessionManager(tmp_path)
-    # No sessions saved → profile is free.
     mgr.assert_profile_free("anything")
 
 
 def test_assert_profile_free_after_session_stops(tmp_path) -> None:
     mgr = SessionManager(tmp_path)
-    # PID 999999 is dead → reconcile will mark stopped on list, but
-    # active_profile_ids should already exclude it.
     s = Session(id="X", pid=999999, profile_id="P-old",
                 status=SessionStatus.RUNNING.value)
     mgr.save(s)
     mgr.assert_profile_free("P-old")  # must NOT raise
+
+
+def test_pid_start_time_self_is_set() -> None:
+    """We can read our own process's start time."""
+    st = _pid_start_time(os.getpid())
+    assert st is not None
+    assert st > 0
+
+
+def test_pid_start_time_dead_pid_returns_none() -> None:
+    assert _pid_start_time(999999) is None
+
+
+def test_pid_start_time_zero_returns_none() -> None:
+    assert _pid_start_time(0) is None
+
+
+def test_pid_alive_with_matching_start_time() -> None:
+    st = _pid_start_time(os.getpid())
+    assert st is not None
+    assert _pid_alive(os.getpid(), expected_start_time=st)
+
+
+def test_pid_alive_rejects_stale_start_time() -> None:
+    """A start_time that doesn't match the live process must be flagged dead.
+
+    This is the bug fix: before this check, kill() on a recycled PID
+    could SIGTERM an unrelated process. Now it refuses.
+    """
+    real = _pid_start_time(os.getpid())
+    assert real is not None
+    fake = real + 9999.0  # off by enough that the abs()<1.0 tolerance fails
+    assert not _pid_alive(os.getpid(), expected_start_time=fake)
+
+
+def test_pid_alive_without_start_time_is_backward_compatible() -> None:
+    """Sessions persisted before the start_time field don't have one;
+    plain liveness check must still work for them."""
+    assert _pid_alive(os.getpid())  # no expected_start_time
+    assert _pid_alive(os.getpid(), expected_start_time=None)
+
+
+def test_kill_refuses_recycled_pid(tmp_path) -> None:
+    """If a session's PID has been reused by another process, kill()
+    must NOT signal that process — it should mark the session stopped
+    without touching the unrelated PID."""
+    mgr = SessionManager(tmp_path)
+    s = Session(
+        id="ghost",
+        pid=os.getpid(),
+        profile_id="p",
+        status=SessionStatus.RUNNING.value,
+        start_time=12345.0,  # not our real start time
+    )
+    mgr.save(s)
+    result = mgr.kill("ghost", timeout=0.5)
+    assert result.status == SessionStatus.STOPPED.value
+    assert _pid_alive(os.getpid())
 
 
 def test_tail_log(tmp_path) -> None:

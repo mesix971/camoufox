@@ -63,6 +63,12 @@ class Session:
     status: str = SessionStatus.STARTING.value
     exit_code: Optional[int] = None
     error: Optional[str] = None
+    # Process start time (POSIX: jiffies since boot from /proc/<pid>/stat
+    # field 22; Windows: CreationTime FILETIME from GetProcessTimes).
+    # Stored alongside the PID so we can detect PID reuse: if the process
+    # at this PID has a different start time than the one we recorded,
+    # it's a different process — don't kill it.
+    start_time: Optional[float] = None
 
     @staticmethod
     def new_id() -> str:
@@ -76,18 +82,109 @@ class Session:
         return cls(**json.loads(raw))
 
 
-def _pid_alive(pid: int) -> bool:
+def _pid_start_time(pid: int) -> Optional[float]:
+    """Return a stable identifier for *this* process at this PID.
+
+    On POSIX: starttime from /proc/<pid>/stat field 22 (jiffies since
+    boot). The kernel reuses PIDs but a freshly-spawned process always
+    gets a strictly later starttime, so the (pid, starttime) tuple is
+    unique within a boot.
+
+    On Windows: CreationTime as a 64-bit FILETIME from GetProcessTimes.
+
+    Returns None if the PID does not exist or the lookup failed.
+    """
+    if pid <= 0:
+        return None
+    if sys.platform == "win32":
+        return _pid_start_time_windows(pid)
+    try:
+        with open(f"/proc/{pid}/stat", "rb") as f:
+            data = f.read()
+    except (FileNotFoundError, ProcessLookupError, PermissionError):
+        return None
+    # The comm (field 2) can contain spaces and parens, so split after
+    # the LAST ')' to be safe.
+    rparen = data.rfind(b")")
+    if rparen < 0:
+        return None
+    rest = data[rparen + 1:].split()
+    # After the comm, fields are state(3), ppid(4), …, starttime(22).
+    # That's index 22 - 3 = 19 in the rest list.
+    if len(rest) < 20:
+        return None
+    try:
+        return float(rest[19])
+    except ValueError:
+        return None
+
+
+def _pid_start_time_windows(pid: int) -> Optional[float]:
+    import ctypes
+    from ctypes import wintypes
+    PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+    kernel32.OpenProcess.restype = wintypes.HANDLE
+    kernel32.GetProcessTimes.argtypes = [
+        wintypes.HANDLE,
+        ctypes.POINTER(wintypes.FILETIME),
+        ctypes.POINTER(wintypes.FILETIME),
+        ctypes.POINTER(wintypes.FILETIME),
+        ctypes.POINTER(wintypes.FILETIME),
+    ]
+    kernel32.GetProcessTimes.restype = wintypes.BOOL
+    kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+    kernel32.CloseHandle.restype = wintypes.BOOL
+
+    handle = kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+    if not handle:
+        return None
+    try:
+        creation = wintypes.FILETIME()
+        exit_ = wintypes.FILETIME()
+        kernel_ = wintypes.FILETIME()
+        user_ = wintypes.FILETIME()
+        if not kernel32.GetProcessTimes(handle, ctypes.byref(creation),
+                                        ctypes.byref(exit_),
+                                        ctypes.byref(kernel_),
+                                        ctypes.byref(user_)):
+            return None
+        # Combine high+low 32-bit halves into a single 64-bit value.
+        return float((creation.dwHighDateTime << 32) | creation.dwLowDateTime)
+    finally:
+        kernel32.CloseHandle(handle)
+
+
+def _pid_alive(pid: int, expected_start_time: Optional[float] = None) -> bool:
+    """True if PID is alive AND, if expected_start_time is given, it
+    matches the start time of the live process.
+
+    Without ``expected_start_time``, this is a plain liveness check —
+    backwards-compatible for sessions persisted before the start_time
+    field was added. With it, we reject hits where the kernel has
+    reused the PID for an unrelated process (a real risk on long-lived
+    Linux hosts where the 32 768 default PID range wraps).
+    """
     if pid <= 0:
         return False
-    if sys.platform == "win32":
-        return _pid_alive_windows(pid)
-    try:
-        os.kill(pid, 0)
+    if sys.platform != "win32":
+        try:
+            os.kill(pid, 0)
+        except (ProcessLookupError, PermissionError):
+            return False
+        except OSError:
+            return False
+    else:
+        if not _pid_alive_windows(pid):
+            return False
+    if expected_start_time is None:
         return True
-    except (ProcessLookupError, PermissionError):
+    actual = _pid_start_time(pid)
+    if actual is None:
         return False
-    except OSError:
-        return False
+    # FILETIME / jiffies are integers; tolerate tiny float rounding.
+    return abs(actual - expected_start_time) < 1.0
 
 
 def _pid_alive_windows(pid: int) -> bool:
@@ -194,15 +291,20 @@ class SessionManager:
             )
 
     def _reconcile(self, s: Session) -> None:
-        """Update status/exit_code in the pidfile based on whether PID is alive."""
+        """Update status/exit_code in the pidfile based on whether PID is alive.
+
+        Uses the saved start_time (when present) to avoid mistaking a
+        recycled PID for our process — important on long-running hosts
+        where the kernel reuses PIDs.
+        """
         if s.status in (SessionStatus.STOPPED.value, SessionStatus.CRASHED.value):
             return
-        if _pid_alive(s.pid):
+        if _pid_alive(s.pid, expected_start_time=s.start_time):
             if s.status == SessionStatus.STARTING.value:
                 s.status = SessionStatus.RUNNING.value
                 self.save(s)
             return
-        # PID is gone — mark stopped.
+        # PID is gone (or has been reused) — mark stopped.
         s.status = SessionStatus.STOPPED.value
         s.stopped_at = _utc_now_iso()
         self.save(s)
@@ -312,13 +414,21 @@ class SessionManager:
             headless=headless,
             log_path=str(log_path),
             status=SessionStatus.STARTING.value,
+            start_time=_pid_start_time(popen.pid),
         )
         self.save(s)
         return s
 
     def kill(self, session_id: str, timeout: float = 5.0) -> Session:
+        """Stop the session's process, refusing to signal a recycled PID.
+
+        Compares the live PID's start_time against the one we recorded at
+        spawn time. If they don't match, the original process is gone and
+        the PID now belongs to something else (sshd, another user's shell,
+        anything) — we mark the session stopped without sending SIGTERM.
+        """
         s = self.load(session_id)
-        if not _pid_alive(s.pid):
+        if not _pid_alive(s.pid, expected_start_time=s.start_time):
             self._reconcile(s)
             return s
         try:
@@ -328,10 +438,10 @@ class SessionManager:
             return s
         deadline = time.time() + timeout
         while time.time() < deadline:
-            if not _pid_alive(s.pid):
+            if not _pid_alive(s.pid, expected_start_time=s.start_time):
                 break
             time.sleep(0.1)
-        if _pid_alive(s.pid):
+        if _pid_alive(s.pid, expected_start_time=s.start_time):
             try:
                 os.kill(s.pid, signal.SIGKILL)
             except ProcessLookupError:
@@ -344,7 +454,7 @@ class SessionManager:
     def kill_all(self) -> int:
         count = 0
         for s in self.list():
-            if _pid_alive(s.pid):
+            if _pid_alive(s.pid, expected_start_time=s.start_time):
                 self.kill(s.id)
                 count += 1
         return count
