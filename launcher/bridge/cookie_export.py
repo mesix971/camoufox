@@ -32,9 +32,17 @@ def export_profile_cookies(
 
     `visit_urls` - if given, navigate to each and read localStorage from
     that origin (cross-origin storage isn't accessible otherwise).
+
+    Raises ProfileBusyError if a live session already holds this profile —
+    we can't open a second Camoufox on the same user_data_dir without
+    corrupting the Firefox profile.
     """
     import fpgen
     from camoufox.sync_api import Camoufox  # lazy
+
+    from launcher.bridge.commands import sessions_root
+    from launcher.bridge.sessions import SessionManager
+    SessionManager(sessions_root()).assert_profile_free(profile_id)
 
     store = fpgen.ProfileStore(
         os.environ.get("FPGEN_STORE", str(Path.home() / ".camoufox" / "fpgen"))

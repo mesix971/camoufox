@@ -39,6 +39,16 @@ class SessionStatus(str, Enum):
     CRASHED = "crashed"
 
 
+class ProfileBusyError(RuntimeError):
+    """Raised when an operation would launch a second Camoufox process on a
+    profile's user_data_dir while another active session already holds it.
+
+    Concurrent processes on the same Firefox profile fight over parent.lock,
+    corrupt places.sqlite/cookies.sqlite, and on Windows can both succeed at
+    opening the profile, producing silent data loss.
+    """
+
+
 @dataclass
 class Session:
     id: str
@@ -152,6 +162,37 @@ class SessionManager:
         out.sort(key=lambda s: s.started_at, reverse=True)
         return out
 
+    def active_profile_ids(self) -> set[str]:
+        """Return the set of profile_ids whose Camoufox process is currently
+        live. Reads pidfiles fresh and checks PID liveness so the answer
+        reflects reality even after a crash.
+        """
+        active: set[str] = set()
+        for path in self.root.glob("*.json"):
+            if path.name.endswith(".tmp"):
+                continue
+            try:
+                s = Session.from_json(path.read_text())
+            except (OSError, json.JSONDecodeError, TypeError):
+                continue
+            if s.status in (SessionStatus.STOPPED.value, SessionStatus.CRASHED.value):
+                continue
+            if _pid_alive(s.pid):
+                active.add(s.profile_id)
+        return active
+
+    def assert_profile_free(self, profile_id: str) -> None:
+        """Raise ProfileBusyError if a live session already owns this profile.
+
+        Call before any operation that would open a second Camoufox process
+        on the same user_data_dir (spawn, cookie export, warmup task, …).
+        """
+        if profile_id in self.active_profile_ids():
+            raise ProfileBusyError(
+                f"profile {profile_id!r} is already in use by a live session; "
+                f"stop it first or wait for it to finish"
+            )
+
     def _reconcile(self, s: Session) -> None:
         """Update status/exit_code in the pidfile based on whether PID is alive."""
         if s.status in (SessionStatus.STOPPED.value, SessionStatus.CRASHED.value):
@@ -194,7 +235,13 @@ class SessionManager:
         tile: Optional[tuple] = None,  # (x, y, w, h)
         runner_argv_extra: Optional[List[str]] = None,
     ) -> Session:
-        """Start a detached session_runner subprocess. Returns the persisted Session."""
+        """Start a detached session_runner subprocess. Returns the persisted Session.
+
+        Raises ProfileBusyError if another live session already owns this
+        profile_id — concurrent Camoufox processes on the same user_data_dir
+        corrupt the Firefox profile.
+        """
+        self.assert_profile_free(profile_id)
         session_id = Session.new_id()
         log_path = self.logs_dir / f"{session_id}.log"
         log_fh = log_path.open("w")  # closed when this process exits
