@@ -367,3 +367,153 @@
 - ⚪ Faux positif : 2 (§8.2, §8.6)
 
 **Fin T2e1.** Prochain : T2e2 §9 + §10 + bilan global.
+
+---
+
+## §9. Issues upstream (audit)
+
+> Note : l'audit a cité 15 numéros d'issues daijro/camoufox. Ces numéros n'ont **pas** été vérifiés contre le tracker upstream (pas de fetch network effectué). Les classifications ci-dessous sont basées sur la pertinence du sujet pour notre fork, pas sur l'existence réelle de l'issue.
+
+### §9.1 — #589 Memory leak persistent_context long-running
+🟠 **MAJEUR** — symptôme connu Firefox + Playwright, à monitorer.
+
+### §9.2 — #588 navigator.webdriver timing side-channel
+🟠 **MAJEUR** — vecteur de détection avancé.
+
+### §9.3 — #585 proxy.bypass ignoré
+⚪ **FAUX POSITIF** — non utilisé dans notre fork.
+
+### §9.4 — #584 fingerprint inconsistant entre tabs
+🟡 **MINEUR** — limitation architecturale documentée.
+
+### §9.5 — #583 Canvas readback noise pattern
+🟠 **MAJEUR** — patch `canvas-webgl-pixel-noise.patch` à valider contre CreepJS.
+
+### §9.6 — #582 navigator.userAgentData absent
+🟡 **MINEUR** — feature gap, pas un bug.
+
+### §9.7 — #581 WebRTC ICE order
+🟠 **MAJEUR** — patch `webrtc-ice-candidate-order.patch` existe, à valider.
+
+### §9.8 — #578 Build Windows FF142
+🟠 **MAJEUR** si confirmé en CI. À tester.
+
+### §9.9 — #577 bootstrap Ubuntu 24.04
+🟡 **MINEUR** — niche.
+
+### §9.10 — #575 geolocation cache leak
+🟠 **MAJEUR** — fingerprint critique.
+
+### §9.11 — #574 fonts par OS
+🟡 **MINEUR**.
+
+### §9.12 — #573 Battery temporal pattern
+🟡 **MINEUR**.
+
+### §9.13 — #572 Accept-Language vs navigator.languages
+🟠 **MAJEUR** — mismatch détectable.
+
+### §9.14 — #569 Intl.DateTimeFormat vs Date offset
+🟠 **MAJEUR** — recoupement classique.
+
+### §9.15 — #567 window.chrome
+⚪ **FAUX POSITIF** — pas un bug, c'est cohérent.
+
+---
+
+**Bilan §9 (15 entrées non re-vérifiées contre tracker)** :
+- 🟠 Majeur : 7
+- 🟡 Mineur : 6
+- ⚪ Faux positif : 2
+
+---
+
+## §10. Top 10 reclassé par criticité réelle
+
+### 🔴 CRITIQUE — à corriger immédiatement (2)
+1. **§1.1 / §2.7** — Lancement concurrent sur même `user_data_dir` (cookie_export OU task_worker warmup+launch sur même profile_id). Corruption Firefox certaine.
+   → **Fix** : lock per-profile dans `SessionManager.spawn` ; refus si profile_id déjà actif.
+
+### 🟠 MAJEUR — à corriger à court terme (8)
+2. **§4.7** — Claim files orphelins dans taskqueue après crash worker.
+   → **Fix** : sweeper périodique pour locks > timeout configuré.
+3. **§1.3** — `os.kill` sans start_time check sur POSIX.
+   → **Fix** : lire `/proc/<pid>/stat` champ 22 et comparer.
+4. **§1.2** — Webhook bloquant 5 s.
+   → **Fix** : queue + thread daemon ou `aiohttp` async.
+5. **§2.3** — Race `_reconcile` vs `_mark_running` sur Windows.
+   → **Fix** : RLock partagé via SessionManager.
+6. **§3.6** — `actions.repeat` sans MAX_ITERATIONS.
+   → **Fix** : compteur global, `MAX_ACTIONS = 10_000`.
+7. **§3.9** — Queue-it captcha non géré.
+   → **Fix** : détection `text/html` → bascule en mode browser.
+8. **§9.5/§9.7** — Patches canvas + WebRTC ICE à valider build + CreepJS.
+   → **Fix** : run `make build` + benchmark stealth.
+9. **§9.13** — Cohérence Accept-Language ↔ navigator.languages.
+   → **Fix** : propager `fpgen.profile.languages` aux headers proxy.
+
+### 🟡 MINEUR — backlog (38)
+Cosmétique, perf marginale, dette technique. Voir sections §3, §4, §5, §6, §7, §8 ci-dessus.
+
+### ⚪ FAUX POSITIFS confirmés (24)
+
+| Section | Sujet | Raison du faux positif |
+|---------|-------|------------------------|
+| §1.4 | Popen close_fds | `stdin/stdout/stderr` explicites, default Python 3.7+ OK |
+| §1.6 | eval_js non sanitisé | Pas d'input utilisateur dans le JS |
+| §2.2 | 3× `_STOP` globals | Processus distincts, pas threads |
+| §2.4 | `_last_pos` thread race | Playwright sync mono-thread |
+| §2.5 | Signal vs Popen.wait | Browser dans context manager, pas Popen |
+| §3.2 | Proxy parser `@`/`:` | `urlparse + unquote` gère URL-form |
+| §3.8 | Tâche sans id | `enqueue` génère l'id côté queue |
+| §3.11 | Cookies HTTPOnly | Utilise `ctx.cookies()` natif Playwright |
+| §4.2 | Popen zombies | `start_new_session` → init reap |
+| §4.3 | Context non fermé | `with Camoufox(...)` |
+| §4.8 | Threads daemon sans join | Pas de threads |
+| §5.4 | Duplication humanlike/actions | `actions/runner.py` n'existe pas |
+| §6.1 | Bridge HTTP bind 0.0.0.0 | Pas de serveur HTTP, dispatcher CLI |
+| §6.4 | eval_js arbitraire | Feature by design |
+| §6.5 | Popen args injection | Argv typé via kwargs |
+| §6.8 | Signature DSL | Pas régression, feature manquante |
+| §8.2 | Pas de tests | 20+ test_*.py existent |
+| §8.6 | Pas de healthcheck bridge | Pas de bridge HTTP |
+| §9.3 | proxy.bypass | Non utilisé |
+| §9.15 | window.chrome | Cohérent par design |
+| §1.7 (partiel) | Patches `draft-*` | Renommés, pas tous présents |
+
+---
+
+## Bilan global
+
+### Compteurs finaux
+
+| Sévérité | Count | % du total |
+|----------|-------|-----------|
+| 🔴 **CRITIQUE** | 2 | 2.5 % |
+| 🟠 **MAJEUR** | 12 | 15.2 % |
+| 🟡 **MINEUR** | 41 | 51.9 % |
+| ⚪ **FAUX POSITIF** | 24 | 30.4 % |
+| **Total** | **79** | 100 % |
+
+### Lecture du résultat
+
+**30 % de l'audit était du faux positif.** L'audit initial avait :
+1. Halluciné un serveur HTTP (`§6.1`, `§8.6`) qui n'existe pas — c'est un dispatcher CLI.
+2. Affirmé l'absence de tests qui existent dans tous les modules (`§8.2`).
+3. Inventé des risques d'injection sur du code sans input utilisateur (`§1.6`, `§6.4`, `§6.5`).
+4. Ignoré que les `with Camoufox(...)` gèrent le cleanup automatiquement (`§4.3`).
+5. Confondu processus distincts et threads (`§2.2`, `§4.8`).
+6. Référencé un fichier inexistant `actions/runner.py` (`§5.4`).
+
+**Les 2 vrais critiques** sont la **même cause racine** : le `user_data_dir` est partagé par profile_id, donc tout lancement concurrent (cookie_export, warmup, launch_session) sur le même profil corrompt le profil Firefox. **Un seul lock per-profile résout les deux.**
+
+**Les 12 majeurs** sont distribués entre :
+- 4 bugs concrets côté code (§1.2, §1.3, §2.3, §4.7, §3.6)
+- 1 limitation gameplay (§3.9 captcha Queue-it)
+- 7 issues upstream à monitorer
+
+### Recommandation
+
+Avant de toucher quoi que ce soit, implémenter le **lock per-profile** (1 fix résout 2 critiques). Ensuite, balayer les 4 bugs concrets majeurs en 2-3 jours. Le reste (mineurs + upstream) peut attendre la prochaine release.
+
+**Fin du triage.**
