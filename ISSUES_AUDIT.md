@@ -470,5 +470,188 @@ Threads démarrés en `daemon=True` sans `join()` au shutdown. Sur kill propre, 
 
 ---
 
-**Fin Turn 3c.** À suivre :
-- Turn 4 : §5–§10 (dead code, sécurité, perf, archi, upstream issues, recommandations Top 10)
+## §5. Dead code et duplication (🟡)
+
+### 5.1 — `from dataclasses import asdict as _asdict` dupliqué 5 fois
+**Fichier** : `launcher/bridge/commands.py:99,139,669,774,841`
+**Sévérité** : 🟡 Mineur
+
+Le même import inline est répété dans 5 handlers distincts. Vestige de copy-paste.
+
+**Correction** : un unique `from dataclasses import asdict` en tête de module.
+
+---
+
+### 5.2 — `commands.py` à 903 lignes — god module
+**Fichier** : `launcher/bridge/commands.py`
+**Sévérité** : 🟡 Mineur (dette technique)
+
+46 commandes HTTP dans un seul fichier. Mélange routing, validation, business logic. Difficile à tester unitairement.
+
+**Correction** : découper par domaine :
+- `commands/sessions.py`
+- `commands/tasks.py`
+- `commands/proxies.py`
+- `commands/captchas.py`
+- `commands/cookies.py`
+- `commands/__init__.py` qui agrège la table de routing.
+
+---
+
+### 5.3 — `Profile` dataclass à ~70 champs
+**Fichier** : `fpgen/profile.py:147`
+**Sévérité** : 🟡 Mineur
+
+Un seul dataclass mélange : navigator, screen, WebGL, audio, fonts, geo, locale, battery, voices. Toute modif d'un sous-domaine recompile tout.
+
+**Correction** : décomposer en sous-dataclasses :
+```python
+@dataclass
+class NavigatorProfile: ...
+@dataclass
+class ScreenProfile: ...
+@dataclass
+class WebGLProfile: ...
+@dataclass
+class Profile:
+    navigator: NavigatorProfile
+    screen: ScreenProfile
+    webgl: WebGLProfile
+    ...
+```
+
+---
+
+### 5.4 — `humanlike/cursor.py` fonctions dupliquées dans `actions/runner.py`
+**Sévérité** : 🟡 Mineur
+
+`actions/runner.py` réimplémente une version simplifiée du mouvement Bezier au lieu d'importer `humanlike.move()`. Maintenance double.
+
+**Correction** : `actions/runner.py` importe `from humanlike import move, type_text, click`.
+
+---
+
+### 5.5 — Constantes magiques répétées
+**Fichiers** : multiples
+**Sévérité** : 🟡 Mineur
+
+- `5` (timeout webhook) en dur dans `webhook.py`
+- `2.0` (poll interval) en dur dans `session_runner.py`, `task_worker.py`, `scheduler.py`
+- `os.path.join("./profiles", sid)` duppliqué partout
+
+**Correction** : `launcher/bridge/config.py` avec constantes nommées + lecture depuis `~/.camoufox/config.json`.
+
+---
+
+### 5.6 — `actions` types `if`/`repeat` ne valident pas leurs payloads
+**Fichier** : `actions/runner.py`
+**Sévérité** : 🟡 Mineur
+
+Le DSL accepte `{"type": "if", "condition": "...", "then": [...]}` sans schema validation. Une faute de frappe silently no-op.
+
+**Correction** : utiliser `pydantic` ou schema JSON pour valider à `parse_action()`.
+
+---
+
+### 5.7 — Imports non utilisés
+**Fichiers** : à scanner avec `ruff check --select F401`
+**Sévérité** : 🟡 Mineur
+
+Probable accumulation après les multiples refactors de session.
+
+**Correction** : `ruff check --fix` en pre-commit.
+
+---
+
+## §6. Sécurité (🔴/🟠)
+
+### 6.1 — Bridge HTTP sans auth bind sur `127.0.0.1` ?
+**Fichier** : `launcher/bridge/server.py`
+**Sévérité** : 🔴 Critique si bind 0.0.0.0
+
+À vérifier : si `server.py` bind `0.0.0.0` au lieu de `127.0.0.1`, **n'importe quelle machine du LAN** peut lancer/tuer des sessions, exporter cookies, lire proxies+passwords.
+
+**Correction** :
+1. Forcer bind `127.0.0.1` (loopback only).
+2. Token aléatoire généré au démarrage, stocké dans `~/.camoufox/bridge.token`, requis dans header `X-Bridge-Token`.
+3. Refus si origin différente.
+
+---
+
+### 6.2 — Proxies stockés en clair dans `state.json`
+**Fichier** : `proxypool/store.py`
+**Sévérité** : 🟠 Majeur
+
+`./proxies.json` contient `user:pass@host:port` en clair, mode 0644. Lisible par tous les users du host.
+
+**Correction** :
+- chmod 0600 à la création.
+- Optionnel : chiffrement AES-GCM avec clé dérivée du keychain OS (`keyring` Python).
+
+---
+
+### 6.3 — Webhooks vers URL utilisateur sans validation
+**Fichier** : `launcher/bridge/webhook.py:81`
+**Sévérité** : 🟠 Majeur (SSRF)
+
+L'URL webhook est fournie par l'utilisateur via l'UI. Aucune validation. Si un utilisateur configure `http://169.254.169.254/latest/meta-data/` (AWS IMDS) ou `http://127.0.0.1:8080/admin`, le launcher fait la requête depuis le host → SSRF dans les logs.
+
+**Correction** : whitelist scheme `https://`, refus si IP privée/loopback (RFC 1918, link-local), DNS-rebinding protection (résoudre puis vérifier l'IP).
+
+---
+
+### 6.4 — `eval_js` dans le DSL d'actions exécute du JS arbitraire
+**Fichier** : `actions/runner.py`
+**Sévérité** : 🟠 Majeur (par design, mais à documenter)
+
+L'action `{"type": "eval_js", "code": "..."}` fait `page.evaluate(code)`. Si un script de tâches vient d'une source non fiable (ex. téléchargé depuis un serveur de campagne), exécution JS dans le contexte du site visité.
+
+**Correction** :
+- Documenter clairement que `eval_js` est privileged.
+- Optionnel : flag `--allow-eval-js` au démarrage du worker, désactivé par défaut.
+
+---
+
+### 6.5 — `Popen([camoufox_bin, ...args])` avec args utilisateur
+**Fichier** : `launcher/bridge/sessions.py:255`
+**Sévérité** : 🟠 Majeur
+
+Si `args` injectent un `--remote-debugging-port=0` ou `--user-data-dir=/etc`, on peut détourner le profil. Liste blanche d'args manquante.
+
+**Correction** : whitelist stricte des args acceptés (`--headless`, `--width`, `--height`, etc.). Refus de tout `--user-data-dir`, `--remote-debugging-*`, `--new-window`.
+
+---
+
+### 6.6 — `cookie_export.py` écrit sur disque sans atomicité
+**Fichier** : `launcher/bridge/cookie_export.py`
+**Sévérité** : 🟡 Mineur
+
+Si crash pendant écriture du JSON cookies, fichier tronqué = restore ratée silencieusement.
+
+**Correction** : tmp + os.replace (cf. §1.5).
+
+---
+
+### 6.7 — Logs contiennent les valeurs de cookies / proxy passwords ?
+**Fichiers** : `webhook.py`, `cookie_export.py`, `commands.py`
+**Sévérité** : 🟠 Majeur (à vérifier)
+
+Si `logger.info(f"payload={payload}")` est appelé avec un payload qui contient cookies/proxy creds, ils fuient dans les logs (et potentiellement dans les webhooks).
+
+**Correction** : redaction filter `RedactSecretsFilter` qui masque `password=***`, `Set-Cookie: ***` dans tous les loggers.
+
+---
+
+### 6.8 — Pas de signature des actions DSL
+**Fichier** : `actions/runner.py`
+**Sévérité** : 🟡 Mineur
+
+Si les fichiers d'actions sont stockés dans un dossier partagé (ex. NAS d'équipe), un attaquant peut modifier un script à distance pour ajouter `eval_js` malveillant.
+
+**Correction** : signer les fichiers d'actions avec une clé HMAC par worker, vérifier au load.
+
+---
+
+**Fin Turn 4a.** À suivre :
+- Turn 4b : §7 Performance + §8 Architecture
+- Turn 4c : §9 Issues upstream + §10 Top 10 recommandations
