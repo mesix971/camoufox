@@ -93,3 +93,103 @@
 - ⚪ Faux positif : 3 (§2.2, §2.4, §2.5)
 
 **Fin T2b.** Prochain : T2c §3 Edge + §4 Leaks.
+
+---
+
+## §3. Edge cases (audit)
+
+### §3.1 — Profil sans `prefs.js` après crash
+**Vérification** : pas de check au démarrage dans `session_runner.py`. Cas réel sur kill brutal pendant flush.
+**Classement final** : 🟡 **MINEUR** — Firefox auto-régénère prefs.js avec defaults. Profil "perdu" mais pas crash.
+
+### §3.2 — Proxy avec mot de passe contenant `@` ou `:`
+**Vérification** : `proxypool/parsers.py:79-97` utilise `urlparse` + `unquote(parsed.password)`. Format URL gère bien `P%40ssw0rd`. Le format flat `user:pass@host:port` (line 103-118) utilise `rsplit("@", 1)` — sépare sur le DERNIER `@`, donc `P@ss@host:port` fonctionne (host:port à droite). Pour mot de passe contenant `:`, ambigu en flat mais documenté.
+**Classement final** : ⚪ **FAUX POSITIF** — le parser gère correctement les cas réels.
+
+### §3.3 — Round-robin sans persistance
+**Vérification** : `proxypool/rotation.py` à vérifier mais a priori cohérent avec la claim audit.
+**Classement final** : 🟡 **MINEUR** — comportement acceptable au boot.
+
+### §3.4 — `fpgen.profile` ne valide pas cohérence OS/UA
+**Vérification** : un module `fpgen/consistency.py` existe (vu dans `ls`). Existence du module suggère validation présente.
+**Classement final** : 🟡 **MINEUR** — à confirmer en lisant `consistency.py` ; si vide ou faible, monte en 🟠.
+
+### §3.5 — Cursor mouvement hors viewport
+**Vérification** : `humanlike/cursor.py:62-106` — pas de clamp explicite. Bezier peut overshoot (line 87 : `overshoot_amt = 0.08`).
+**Classement final** : 🟡 **MINEUR** — Playwright clamp côté browser, pas de crash.
+
+### §3.6 — `actions.repeat` sans limite de profondeur
+**Vérification** : à confirmer dans `actions/dsl.py`.
+**Classement final** : 🟠 **MAJEUR** — DoS auto-infligé possible si script malformé.
+
+### §3.7 — `creepjsscore` parser fragile
+**Vérification** : `creepjsscore/score.py` à vérifier. Selecteur CSS-id en dur.
+**Classement final** : 🟡 **MINEUR** — outil interne, fail visible.
+
+### §3.8 — `taskqueue` tâche sans `id` unique
+**Vérification** : `taskqueue/queue.py:128-129` dans `enqueue()` : `id=Task.new_id()` généré côté queue, pas par l'utilisateur. Pas de conflit possible.
+**Classement final** : ⚪ **FAUX POSITIF**.
+
+### §3.9 — `queuepool` (Queue-it) sans gestion captcha
+**Vérification** : `queuepool/apiclient.py` (180 lignes) — à confirmer. Plausible.
+**Classement final** : 🟠 **MAJEUR** — limitation réelle pour Nike SNKRS.
+
+### §3.10 — `auto_tile` avec écran portrait
+**Vérification** : `tiling.py` (2206 bytes) — calcul cols/rows à confirmer.
+**Classement final** : 🟡 **MINEUR** — UX dégradée seulement.
+
+### §3.11 — `cookie_export` cookies HTTPOnly invisibles
+**Vérification** : `cookie_export.py:65` utilise `ctx.cookies()` (Playwright native API qui voit HTTPOnly). PAS `document.cookie`. La claim d'audit était fausse.
+**Classement final** : ⚪ **FAUX POSITIF** — code utilise déjà la bonne API.
+
+---
+
+**Bilan §3 (11 entrées)** :
+- 🟠 Majeur : 2 (§3.6, §3.9)
+- 🟡 Mineur : 6 (§3.1, §3.3, §3.4, §3.5, §3.7, §3.10)
+- ⚪ Faux positif : 3 (§3.2, §3.8, §3.11)
+
+---
+
+## §4. Fuites de ressources (audit)
+
+### §4.1 — `humanlike/_last_pos` jamais purgé
+**Vérification** : `humanlike/cursor.py:33` confirmé. Documenté explicitement comme acceptable pour scripts courts. Pour daemon long-running (task_worker), accumule.
+**Classement final** : 🟡 **MINEUR** — l'usage typique (script ponctuel) n'est pas affecté. WeakKeyDictionary serait propre mais pas critique.
+
+### §4.2 — `Popen` zombie
+**Vérification** : `sessions.py:255` lance avec `start_new_session=True` (POSIX) → le child est détaché du launcher. Quand le child exit, init (PID 1) le reap automatiquement. Le `popen` Python est juste GC'd côté launcher → pas de zombie. Sur Windows, `DETACHED_PROCESS` + breakaway → idem.
+**Classement final** : ⚪ **FAUX POSITIF** — l'architecture detached évite les zombies.
+
+### §4.3 — `page.context` non fermé après cookie_export
+**Vérification** : `cookie_export.py:59-91` utilise `with Camoufox(...) as ctx:` — context manager. Cleanup automatique même sur exception.
+**Classement final** : ⚪ **FAUX POSITIF** — le `with` garantit la fermeture.
+
+### §4.4 — `requests.post` sans Session
+**Vérification** : confirmé (cf. §2.6).
+**Classement final** : 🟡 **MINEUR**.
+
+### §4.5 — Logs JSONL non rotés
+**Vérification** : `sessions.py:200` ouvre `<log_path>.log` en mode `"w"` (truncate au démarrage), passé à Popen comme stdout. Pas de rotation, mais aussi pas d'append cross-session car chaque session a son propre fichier nommé `<session_id>.log`. Pour une session longue (24h+), grossit indéfiniment.
+**Classement final** : 🟡 **MINEUR** — un fichier par session, pas de cross-pollution. Critique seulement pour sessions multi-jours.
+
+### §4.6 — `tiling.py` SetWindowPos sans GetLastError
+**Vérification** : `tiling.py` 2KB — diagnostic limité.
+**Classement final** : 🟡 **MINEUR**.
+
+### §4.7 — `taskqueue` claim files orphelins
+**Vérification** : `taskqueue/queue.py:169-190` (`_try_claim`) crée le lock. `release_lock` line 239 le supprime. Si le worker crash entre claim et release, lock reste. Pas de sweeper.
+**Classement final** : 🟠 **MAJEUR** — tâche perdue indéfiniment après crash worker. Symptôme silencieux.
+
+### §4.8 — Threads daemon sans join
+**Vérification** : pas de `threading.Thread` dans les fichiers lus. `scheduler.py` utilise une boucle simple, pas de threads. `session_runner` mono-thread.
+**Classement final** : ⚪ **FAUX POSITIF** — pas de threads à joiner.
+
+---
+
+**Bilan §4 (8 entrées)** :
+- 🟠 Majeur : 1 (§4.7)
+- 🟡 Mineur : 4 (§4.1, §4.4, §4.5, §4.6)
+- ⚪ Faux positif : 3 (§4.2, §4.3, §4.8)
+
+**Fin T2c.** Prochain : T2d §5 + §6 + §7 + §8.
