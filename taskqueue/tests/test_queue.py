@@ -252,3 +252,72 @@ def test_pop_skips_already_running_tasks(tmp_path) -> None:
     t.mark_started()
     q.save(t)
     assert q.pop_due() is None
+
+
+def _age_lockfile(tmp_path, task_id: str, age_seconds: float) -> None:
+    """Backdate the mtime of a task's lockfile to simulate worker crash."""
+    import os
+    lock = tmp_path / f".lock.{task_id}"
+    past = lock.stat().st_mtime - age_seconds
+    os.utime(lock, (past, past))
+
+
+def test_sweep_releases_stale_claim_for_retriable_task(tmp_path) -> None:
+    """A claim older than max_age_seconds rolls the task back to QUEUED."""
+    q = TaskQueue(tmp_path)
+    t = q.enqueue(ACTION, retry_policy=RetryPolicy(max_retries=3))
+    claimed = q.pop_due()
+    assert claimed is not None
+    _age_lockfile(tmp_path, t.id, age_seconds=7200)  # 2h old
+
+    swept = q.sweep_stale_claims(max_age_seconds=3600)  # threshold 1h
+    assert swept == [t.id]
+
+    # Task is QUEUED again with bumped attempts; lock is gone.
+    reloaded = q.get(t.id)
+    assert reloaded.status == TaskStatus.QUEUED.value
+    assert reloaded.attempts == 1
+    assert "worker presumed dead" in (reloaded.error or "")
+    assert not (tmp_path / f".lock.{t.id}").exists()
+
+
+def test_sweep_marks_failed_when_no_retries_left(tmp_path) -> None:
+    """A stale claim with no retries left is terminally FAILED."""
+    q = TaskQueue(tmp_path)
+    t = q.enqueue(ACTION, retry_policy=RetryPolicy(max_retries=0))
+    q.pop_due()
+    _age_lockfile(tmp_path, t.id, age_seconds=7200)
+
+    swept = q.sweep_stale_claims(max_age_seconds=3600)
+    assert swept == [t.id]
+    reloaded = q.get(t.id)
+    assert reloaded.status == TaskStatus.FAILED.value
+    assert not (tmp_path / f".lock.{t.id}").exists()
+
+
+def test_sweep_leaves_fresh_claims_alone(tmp_path) -> None:
+    """A worker that just started shouldn't get its task ripped out."""
+    q = TaskQueue(tmp_path)
+    t = q.enqueue(ACTION)
+    q.pop_due()  # fresh claim
+
+    swept = q.sweep_stale_claims(max_age_seconds=3600)
+    assert swept == []
+    # Lock still there, task still RUNNING.
+    assert (tmp_path / f".lock.{t.id}").exists()
+    assert q.get(t.id).status == TaskStatus.RUNNING.value
+
+
+def test_sweep_drops_orphan_lock_for_deleted_task(tmp_path) -> None:
+    """Lock without a corresponding task file is just removed."""
+    q = TaskQueue(tmp_path)
+    t = q.enqueue(ACTION)
+    q.pop_due()
+    # Delete just the task file, leaving the lock orphaned.
+    (tmp_path / f"{t.id}.json").unlink()
+    _age_lockfile(tmp_path, t.id, age_seconds=7200)
+
+    swept = q.sweep_stale_claims(max_age_seconds=3600)
+    # No task to sweep, just the bare lock cleaned up.
+    assert swept == []
+    assert not (tmp_path / f".lock.{t.id}").exists()
