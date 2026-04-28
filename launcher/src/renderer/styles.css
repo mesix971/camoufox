@@ -834,3 +834,77 @@ main > div {
   border-left: 0;
   box-shadow: inset 0 0 0 1px rgb(var(--color-accent-500) / 0.3);
 }
+
+/* =================================================================== */
+/* COMMAND PALETTE                                                      */
+/* =================================================================== */
+
+@keyframes palette-in {
+  from { opacity: 0; transform: translateY(-12px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.command-palette {
+  animation: palette-in 180ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+[data-theme="linear"] .command-palette {
+  background: linear-gradient(180deg,
+    rgb(var(--color-elevated)) 0%,
+    rgb(var(--color-bg)) 100%);
+  border-color: rgb(var(--color-border));
+  box-shadow:
+    0 0 0 1px rgb(var(--color-accent-500) / 0.12),
+    0 30px 80px rgb(0 0 0 / 0.6);
+}
+
+[data-theme="raycast"] .command-palette {
+  background: rgb(var(--color-elevated) / 0.7);
+  backdrop-filter: blur(28px) saturate(180%);
+  border-radius: 16px;
+  border: 1px solid rgb(var(--color-border) / 0.6);
+  box-shadow:
+    0 0 0 1px rgb(var(--color-accent-500) / 0.18),
+    0 0 60px rgb(var(--color-accent-500) / 0.18),
+    0 30px 80px rgb(0 0 0 / 0.6);
+  position: relative;
+  overflow: hidden;
+}
+[data-theme="raycast"] .command-palette::before {
+  content: "";
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg,
+    transparent, rgb(var(--color-accent-500) / 0.8), transparent);
+}
+
+[data-theme="brutalist"] .command-palette {
+  background: rgb(var(--color-bg));
+  border: 2px solid rgb(var(--color-accent-500));
+  border-radius: 0;
+  box-shadow: 6px 6px 0 rgb(var(--color-accent-500) / 0.4);
+  animation: palette-in 120ms steps(4, end);
+}
+[data-theme="brutalist"] .command-palette input {
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-family: var(--font-mono);
+}
+[data-theme="brutalist"] .command-palette input::placeholder {
+  text-transform: none;
+  letter-spacing: normal;
+}
+[data-theme="brutalist"] .command-palette button {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 700;
+}
+[data-theme="brutalist"] .command-palette button.bg-accent-500\/15 {
+  background: rgb(var(--color-accent-500));
+  color: rgb(var(--color-bg)) !important;
+}
+[data-theme="brutalist"] .command-palette button.bg-accent-500\/15 span {
+  background: rgb(var(--color-bg)) !important;
+  color: rgb(var(--color-accent-500)) !important;
+}

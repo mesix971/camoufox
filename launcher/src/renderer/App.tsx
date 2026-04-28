@@ -1,7 +1,9 @@
+import { useEffect } from "react";
 import {
   LayoutDashboard, Users, Globe, Monitor, ListChecks, Wand2, Settings,
   type LucideIcon,
 } from "lucide-react";
+import { CommandPalette } from "./components/CommandPalette";
 import { DashboardPage } from "./pages/DashboardPage";
 import { MacrosPage } from "./pages/MacrosPage";
 import { ProfilesPage } from "./pages/ProfilesPage";
@@ -34,6 +36,21 @@ export function App() {
   const layout = useAppStore((s) => s.layout);
   const toast = useAppStore((s) => s.toast);
   const clearToast = useAppStore((s) => s.clearToast);
+  const toggleCommandPalette = useAppStore((s) => s.toggleCommandPalette);
+
+  // Global ⌘K / Ctrl+K to toggle the command palette. The listener is
+  // attached at the App level so it works regardless of which page is
+  // rendered. We swallow the keystroke so no input field steals it.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        toggleCommandPalette();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [toggleCommandPalette]);
 
   return (
     <div className={`h-full ${layout === "sidebar" ? "flex" : "flex flex-col"}`}>
@@ -63,6 +80,8 @@ export function App() {
           {toast.text}
         </div>
       )}
+
+      <CommandPalette />
     </div>
   );
 }
@@ -89,10 +108,16 @@ function TopBar() {
           {label}
         </button>
       ))}
-      <div className="ml-auto flex items-center gap-2 text-xs text-surface-100/50">
+      <button
+        type="button"
+        onClick={() => useAppStore.getState().openCommandPalette()}
+        className="ml-auto flex items-center gap-2 text-xs text-surface-100/50
+                   hover:text-surface-100/80 transition-colors"
+        title="Ouvrir la palette de commandes"
+      >
         <kbd className="px-1.5 py-0.5 rounded border border-surface-700 bg-surface-900 font-mono">⌘</kbd>
         <kbd className="px-1.5 py-0.5 rounded border border-surface-700 bg-surface-900 font-mono">K</kbd>
-      </div>
+      </button>
     </header>
   );
 }
@@ -127,13 +152,18 @@ function Sidebar() {
           );
         })}
       </nav>
-      <div className="p-3 border-t border-surface-700 text-xs text-surface-100/50 flex items-center justify-between">
-        <span>palette</span>
+      <button
+        type="button"
+        onClick={() => useAppStore.getState().openCommandPalette()}
+        className="p-3 border-t border-surface-700 text-xs text-surface-100/50 flex items-center
+                   justify-between hover:bg-surface-700/40 hover:text-surface-100/80 transition-colors"
+      >
+        <span>palette de commandes</span>
         <span className="flex items-center gap-1">
           <kbd className="px-1.5 py-0.5 rounded border border-surface-700 bg-surface-900 font-mono">⌘</kbd>
           <kbd className="px-1.5 py-0.5 rounded border border-surface-700 bg-surface-900 font-mono">K</kbd>
         </span>
-      </div>
+      </button>
     </aside>
   );
 }

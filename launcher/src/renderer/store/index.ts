@@ -61,6 +61,12 @@ export interface AppState {
   // Layout — top tabs vs. left sidebar.
   layout: LayoutId;
   setLayout: (l: LayoutId) => void;
+
+  // Command palette (⌘K) — open state.
+  commandPaletteOpen: boolean;
+  openCommandPalette: () => void;
+  closeCommandPalette: () => void;
+  toggleCommandPalette: () => void;
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -184,4 +190,10 @@ export const useAppStore = create<AppState>((set, get) => ({
     applyLayout(layout);
     set({ layout });
   },
+
+  commandPaletteOpen: false,
+  openCommandPalette: () => set({ commandPaletteOpen: true }),
+  closeCommandPalette: () => set({ commandPaletteOpen: false }),
+  toggleCommandPalette: () =>
+    set((s) => ({ commandPaletteOpen: !s.commandPaletteOpen })),
 }));
