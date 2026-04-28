@@ -526,3 +526,253 @@
   font-family: var(--font-mono);
   text-transform: uppercase;
 }
+
+/* =================================================================== */
+/* MODALS, TOASTS, SCROLLBARS, TABLES, MOTION                          */
+/* =================================================================== */
+
+/* Default subtle entrance animation for everyone. */
+@keyframes camoufox-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes camoufox-slide-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes camoufox-pop-in {
+  0%   { opacity: 0; transform: scale(0.94); }
+  60%  { opacity: 1; transform: scale(1.02); }
+  100% { opacity: 1; transform: scale(1); }
+}
+@keyframes camoufox-glitch-in {
+  0%   { opacity: 0; clip-path: inset(0 0 100% 0); }
+  20%  { opacity: 1; clip-path: inset(40% 0 40% 0); }
+  40%  { clip-path: inset(0 40% 0 40%); }
+  60%  { clip-path: inset(20% 0 60% 0); }
+  100% { opacity: 1; clip-path: inset(0 0 0 0); }
+}
+
+/* Modal backdrop + card entrance per theme. */
+.fixed.inset-0.z-50 {
+  animation: camoufox-fade-in 120ms ease-out;
+}
+.fixed.inset-0.z-50 > .bg-surface-800 {
+  animation: camoufox-slide-up 200ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* ---- LINEAR modals ---- */
+[data-theme="linear"] .fixed.inset-0.z-50 {
+  background: rgb(0 0 0 / 0.6);
+  backdrop-filter: blur(4px);
+}
+[data-theme="linear"] .fixed.inset-0.z-50 > .bg-surface-800 {
+  background: linear-gradient(180deg,
+    rgb(var(--color-elevated)) 0%,
+    rgb(var(--color-bg)) 100%);
+  border-color: rgb(var(--color-border));
+  box-shadow:
+    0 0 0 1px rgb(var(--color-accent-500) / 0.1),
+    0 25px 80px rgb(0 0 0 / 0.6);
+  animation: camoufox-slide-up 240ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* ---- RAYCAST modals ---- */
+[data-theme="raycast"] .fixed.inset-0.z-50 {
+  background: rgb(16 13 22 / 0.5);
+  backdrop-filter: blur(20px) saturate(140%);
+}
+[data-theme="raycast"] .fixed.inset-0.z-50 > .bg-surface-800 {
+  background: rgb(var(--color-elevated) / 0.7);
+  backdrop-filter: blur(24px) saturate(180%);
+  border-radius: 18px;
+  border: 1px solid rgb(var(--color-border) / 0.6);
+  box-shadow:
+    0 0 0 1px rgb(var(--color-accent-500) / 0.15),
+    0 30px 80px rgb(var(--color-accent-500) / 0.15),
+    0 30px 80px rgb(0 0 0 / 0.5);
+  animation: camoufox-pop-in 260ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  position: relative;
+  overflow: hidden;
+}
+[data-theme="raycast"] .fixed.inset-0.z-50 > .bg-surface-800::before {
+  content: "";
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg,
+    transparent, rgb(var(--color-accent-500) / 0.8), transparent);
+}
+
+/* ---- BRUTALIST modals ---- */
+[data-theme="brutalist"] .fixed.inset-0.z-50 {
+  background: rgb(0 0 0 / 0.85);
+  background-image: repeating-linear-gradient(
+    0deg,
+    rgb(0 255 65 / 0.04) 0px,
+    rgb(0 255 65 / 0.04) 1px,
+    transparent 1px,
+    transparent 4px);
+}
+[data-theme="brutalist"] .fixed.inset-0.z-50 > .bg-surface-800 {
+  background: rgb(var(--color-bg));
+  border: 2px solid rgb(var(--color-accent-500));
+  border-radius: 0;
+  box-shadow:
+    8px 8px 0 rgb(var(--color-accent-500) / 0.4);
+  animation: camoufox-glitch-in 200ms steps(6, end);
+}
+[data-theme="brutalist"] .fixed.inset-0.z-50 > .bg-surface-800 > header {
+  border-bottom: 2px solid rgb(var(--color-accent-500));
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  background: rgb(var(--color-accent-500) / 0.08);
+  position: relative;
+}
+[data-theme="brutalist"] .fixed.inset-0.z-50 > .bg-surface-800 > header::before {
+  content: "▌";
+  margin-right: 6px;
+  color: rgb(var(--color-accent-500));
+  animation: brutalist-blink 1s steps(2, end) infinite;
+}
+@keyframes brutalist-blink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
+
+/* ---- TOAST ---- */
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes toast-glow {
+  0%, 100% { box-shadow: 0 0 0 1px rgb(var(--color-accent-500) / 0.3); }
+  50%      { box-shadow: 0 0 24px rgb(var(--color-accent-500) / 0.4); }
+}
+.fixed.bottom-4.right-4 {
+  animation: toast-in 200ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+[data-theme="raycast"] .fixed.bottom-4.right-4 {
+  border-radius: 14px;
+  backdrop-filter: blur(16px);
+  background: rgb(var(--color-elevated) / 0.7) !important;
+  animation:
+    toast-in 200ms cubic-bezier(0.34, 1.56, 0.64, 1),
+    toast-glow 2s ease-in-out infinite 200ms;
+}
+[data-theme="brutalist"] .fixed.bottom-4.right-4 {
+  border-radius: 0 !important;
+  border: 2px solid rgb(var(--color-accent-500)) !important;
+  background: rgb(var(--color-bg)) !important;
+  color: rgb(var(--color-accent-500)) !important;
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  box-shadow: 4px 4px 0 rgb(var(--color-accent-500) / 0.5) !important;
+}
+[data-theme="brutalist"] .fixed.bottom-4.right-4::before {
+  content: "> ";
+  color: rgb(var(--color-accent-500));
+}
+
+/* ---- SCROLLBARS ---- */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(var(--color-border)) transparent;
+}
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background: rgb(var(--color-border));
+  border-radius: 999px;
+  border: 2px solid rgb(var(--color-bg));
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: rgb(var(--color-accent-500) / 0.7);
+}
+[data-theme="raycast"] *::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg,
+    rgb(var(--color-accent-500) / 0.4),
+    rgb(var(--color-accent-600) / 0.4));
+}
+[data-theme="raycast"] *::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg,
+    rgb(var(--color-accent-500)),
+    rgb(var(--color-accent-600)));
+  box-shadow: 0 0 8px rgb(var(--color-accent-500) / 0.5);
+}
+[data-theme="brutalist"] *::-webkit-scrollbar {
+  width: 12px;
+}
+[data-theme="brutalist"] *::-webkit-scrollbar-thumb {
+  background: rgb(var(--color-accent-500));
+  border-radius: 0;
+  border: 0;
+}
+[data-theme="brutalist"] *::-webkit-scrollbar-track {
+  background: rgb(var(--color-accent-500) / 0.08);
+  border-left: 1px solid rgb(var(--color-accent-500) / 0.4);
+}
+
+/* ---- TABLES ---- */
+[data-theme="linear"] .table-row {
+  border-color: rgb(var(--color-border) / 0.4);
+  transition: background 120ms ease;
+}
+[data-theme="linear"] .table-row:hover {
+  background: linear-gradient(90deg,
+    rgb(var(--color-accent-500) / 0.06),
+    transparent);
+}
+[data-theme="raycast"] .table-row:hover {
+  background: rgb(var(--color-accent-500) / 0.08);
+  box-shadow: inset 3px 0 0 rgb(var(--color-accent-500));
+}
+[data-theme="brutalist"] table thead {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  border-bottom: 2px solid rgb(var(--color-accent-500));
+}
+[data-theme="brutalist"] .table-row {
+  border-color: rgb(var(--color-accent-500) / 0.25);
+}
+[data-theme="brutalist"] .table-row:hover {
+  background: rgb(var(--color-accent-500) / 0.1);
+  box-shadow:
+    inset 4px 0 0 rgb(var(--color-accent-500)),
+    inset -4px 0 0 rgb(var(--color-accent-500));
+}
+[data-theme="brutalist"] .table-row:hover td:first-child::before {
+  content: "> ";
+  color: rgb(var(--color-accent-500));
+  font-weight: 700;
+}
+
+/* ---- ROUTE / PAGE TRANSITION ---- */
+main > div {
+  animation: camoufox-fade-in 160ms ease-out;
+}
+[data-theme="raycast"] main > div {
+  animation: camoufox-slide-up 240ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+[data-theme="brutalist"] main > div {
+  animation: camoufox-glitch-in 180ms steps(5, end);
+}
+
+/* ---- THEMEPICKER active card ---- */
+[data-theme="raycast"] .ring-accent-500\/30 {
+  box-shadow:
+    0 0 0 2px rgb(var(--color-accent-500) / 0.4),
+    0 8px 32px rgb(var(--color-accent-500) / 0.25);
+}
+[data-theme="brutalist"] .ring-accent-500\/30 {
+  box-shadow:
+    inset 0 0 0 2px rgb(var(--color-accent-500)),
+    4px 4px 0 rgb(var(--color-accent-500) / 0.5);
+}
