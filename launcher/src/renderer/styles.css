@@ -908,3 +908,264 @@ main > div {
   background: rgb(var(--color-bg)) !important;
   color: rgb(var(--color-accent-500)) !important;
 }
+
+/* =================================================================== */
+/* LINEAR — deeper visual identity                                      */
+/* =================================================================== */
+
+/* Dotted background grid (Linear's signature subtle texture). */
+[data-theme="linear"] body {
+  background-image:
+    radial-gradient(circle at 1px 1px,
+      rgb(var(--color-fg) / 0.04) 1px,
+      transparent 0);
+  background-size: 24px 24px;
+  background-attachment: fixed;
+}
+
+/* Hairline fade borders on cards — Linear's clean separators. */
+[data-theme="linear"] section.bg-surface-800,
+[data-theme="linear"] .bg-surface-800.rounded-lg {
+  border-image: linear-gradient(180deg,
+    rgb(var(--color-border) / 0.8) 0%,
+    rgb(var(--color-border) / 0.4) 50%,
+    rgb(var(--color-border) / 0.8) 100%) 1;
+  position: relative;
+}
+
+/* Section headers get a leading colored bar. */
+[data-theme="linear"] section.bg-surface-800 > .uppercase.tracking-wide,
+[data-theme="linear"] .bg-surface-800.rounded-lg > .uppercase.tracking-wide {
+  position: relative;
+  padding-left: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  font-size: 11px;
+}
+[data-theme="linear"] section.bg-surface-800 > .uppercase.tracking-wide::before,
+[data-theme="linear"] .bg-surface-800.rounded-lg > .uppercase.tracking-wide::before {
+  content: "";
+  position: absolute;
+  left: 0; top: 50%;
+  transform: translateY(-50%);
+  width: 3px; height: 12px;
+  background: rgb(var(--color-accent-500));
+  border-radius: 2px;
+}
+
+/* Status badges get a leading dot indicator (Linear's hallmark). */
+[data-theme="linear"] .badge::before {
+  content: "";
+  display: inline-block;
+  width: 6px; height: 6px;
+  border-radius: 999px;
+  background: currentColor;
+  margin-right: 5px;
+  vertical-align: middle;
+  box-shadow: 0 0 4px currentColor;
+}
+
+/* Tabular numbers everywhere — Linear's data feel. */
+[data-theme="linear"] .font-mono,
+[data-theme="linear"] table {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+}
+
+/* Sticky table header. */
+[data-theme="linear"] table thead {
+  position: sticky; top: 0;
+  background: rgb(var(--color-bg) / 0.95);
+  backdrop-filter: blur(8px);
+}
+
+/* Tighter rows + alt-row striping. */
+[data-theme="linear"] .table-row td {
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
+}
+
+/* Inputs: subtle gradient floor on focus. */
+[data-theme="linear"] .input:focus {
+  background: linear-gradient(180deg,
+    rgb(var(--color-bg)) 0%,
+    rgb(var(--color-accent-500) / 0.04) 100%);
+}
+
+/* Big numbers in stat cards: slashed-zero feel + tracking. */
+[data-theme="linear"] .text-4xl.font-bold {
+  font-feature-settings: "ss01" 1, "tnum" 1;
+  letter-spacing: -0.04em;
+  font-weight: 700;
+}
+
+/* =================================================================== */
+/* RAYCAST — deeper visual identity                                     */
+/* =================================================================== */
+
+/* Animated mesh gradient background. Slow drift gives a "live" feel. */
+@keyframes raycast-mesh-drift {
+  0%, 100% {
+    background-position:
+      20% 0%, 100% 100%, 0% 50%, 70% 30%;
+  }
+  50% {
+    background-position:
+      30% 10%, 90% 90%, 10% 60%, 80% 40%;
+  }
+}
+[data-theme="raycast"] body {
+  background-image:
+    radial-gradient(ellipse 60% 40% at 20% 0%,
+      rgb(var(--color-accent-500) / 0.10), transparent 60%),
+    radial-gradient(ellipse 70% 50% at 100% 100%,
+      rgb(var(--color-accent-500) / 0.07), transparent 60%),
+    radial-gradient(ellipse 40% 30% at 0% 50%,
+      rgb(255 99 200 / 0.05), transparent 60%),
+    radial-gradient(ellipse 30% 25% at 70% 30%,
+      rgb(99 200 255 / 0.04), transparent 60%);
+  background-size:
+    100% 100%, 100% 100%, 100% 100%, 100% 100%;
+  background-attachment: fixed;
+  animation: raycast-mesh-drift 24s ease-in-out infinite;
+}
+
+/* All standard cards get a much rounder shape + gradient border. */
+[data-theme="raycast"] section.bg-surface-800,
+[data-theme="raycast"] .bg-surface-800.rounded-lg {
+  border-radius: 20px;
+  padding: 1.25rem;
+  border: 1px solid transparent;
+  background:
+    linear-gradient(rgb(var(--color-elevated) / 0.6),
+                    rgb(var(--color-elevated) / 0.6)) padding-box,
+    linear-gradient(135deg,
+      rgb(var(--color-accent-500) / 0.4) 0%,
+      rgb(var(--color-border) / 0.4) 40%,
+      rgb(var(--color-border) / 0.2) 100%) border-box;
+  backdrop-filter: blur(20px) saturate(160%);
+}
+
+/* Section header gets a glowing accent dot, like Spotlight categories. */
+[data-theme="raycast"] section.bg-surface-800 > .uppercase.tracking-wide,
+[data-theme="raycast"] .bg-surface-800.rounded-lg > .uppercase.tracking-wide {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: rgb(var(--color-accent-500) / 0.1);
+  color: rgb(var(--color-accent-500));
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  font-weight: 600;
+  width: auto;
+  align-self: flex-start;
+}
+[data-theme="raycast"] section.bg-surface-800 > .uppercase.tracking-wide::before,
+[data-theme="raycast"] .bg-surface-800.rounded-lg > .uppercase.tracking-wide::before {
+  content: "";
+  width: 6px; height: 6px;
+  border-radius: 999px;
+  background: rgb(var(--color-accent-500));
+  box-shadow: 0 0 8px rgb(var(--color-accent-500));
+  animation: raycast-pulse 2s ease-in-out infinite;
+}
+@keyframes raycast-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: 0.6; transform: scale(0.8); }
+}
+
+/* Buttons: bigger, rounder, with gradient overlay. */
+[data-theme="raycast"] .btn {
+  padding: 0.5rem 1rem;
+  border-radius: 12px;
+  font-weight: 600;
+  font-size: 13px;
+}
+[data-theme="raycast"] .btn-ghost {
+  border: 1px solid rgb(var(--color-border) / 0.6);
+}
+
+/* Inputs: rounded-xl with glow on focus. */
+[data-theme="raycast"] .input {
+  border-radius: 12px;
+  padding: 0.6rem 0.9rem;
+  font-size: 13px;
+  background: rgb(var(--color-bg) / 0.4);
+}
+[data-theme="raycast"] .input:focus {
+  background: rgb(var(--color-bg));
+  box-shadow:
+    0 0 0 3px rgb(var(--color-accent-500) / 0.2),
+    0 0 32px rgb(var(--color-accent-500) / 0.15);
+}
+
+/* Stat cards get a big rounded shape and a chromatic gradient overlay. */
+[data-theme="raycast"] button.text-left.p-5.rounded-lg {
+  border-radius: 18px;
+  position: relative;
+}
+[data-theme="raycast"] button.text-left.p-5.rounded-lg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(135deg,
+    rgb(var(--color-accent-500) / 0.06) 0%,
+    transparent 60%);
+  pointer-events: none;
+}
+
+/* Big numbers — Raycast uses chunky weight, slight warmth. */
+[data-theme="raycast"] .text-4xl.font-bold {
+  background: linear-gradient(180deg,
+    rgb(var(--color-fg)) 0%,
+    rgb(var(--color-fg-muted)) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  letter-spacing: -0.03em;
+}
+
+/* Accent number gets a coral gradient. */
+[data-theme="raycast"] .text-accent-500.text-4xl {
+  background: linear-gradient(135deg,
+    rgb(var(--color-accent-500)) 0%,
+    rgb(255 130 100) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Table rows get rounded hover + glassmorphism. */
+[data-theme="raycast"] .table-row {
+  border-radius: 8px;
+}
+[data-theme="raycast"] .table-row:hover {
+  background: rgb(var(--color-elevated) / 0.6);
+  backdrop-filter: blur(8px);
+  box-shadow:
+    inset 0 0 0 1px rgb(var(--color-accent-500) / 0.3),
+    0 4px 16px rgb(var(--color-accent-500) / 0.1);
+}
+
+/* Status badges become large rounded pills with subtle glow. */
+[data-theme="raycast"] .badge {
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  box-shadow: 0 0 12px currentColor;
+  filter: drop-shadow(0 0 4px currentColor);
+}
+[data-theme="raycast"] .badge::before {
+  content: "";
+  display: inline-block;
+  width: 5px; height: 5px;
+  border-radius: 999px;
+  background: currentColor;
+  margin-right: 6px;
+  vertical-align: middle;
+  box-shadow: 0 0 6px currentColor;
+}
