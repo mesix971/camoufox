@@ -6,7 +6,10 @@ import type {
   SessionWithMetrics, Task,
 } from "../../shared/types";
 import { api } from "../api";
-import { applyTheme, getStoredTheme, type ThemeId } from "../themes";
+import {
+  applyLayout, applyTheme, getStoredLayout, getStoredTheme,
+  type LayoutId, type ThemeId,
+} from "../themes";
 
 export interface AppState {
   tab: "dashboard" | "profiles" | "proxies" | "sessions" | "tasks" | "macros" | "settings";
@@ -54,6 +57,10 @@ export interface AppState {
   // Theme — persisted in localStorage and applied to <html data-theme>.
   theme: ThemeId;
   setTheme: (t: ThemeId) => void;
+
+  // Layout — top tabs vs. left sidebar.
+  layout: LayoutId;
+  setLayout: (l: LayoutId) => void;
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -170,5 +177,11 @@ export const useAppStore = create<AppState>((set, get) => ({
   setTheme: (theme) => {
     applyTheme(theme);
     set({ theme });
+  },
+
+  layout: getStoredLayout(),
+  setLayout: (layout) => {
+    applyLayout(layout);
+    set({ layout });
   },
 }));

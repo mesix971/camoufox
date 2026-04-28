@@ -1,8 +1,49 @@
 import { useEffect, useState } from "react";
+import { PanelTop, PanelLeft } from "lucide-react";
 import type { RatelimitStats } from "../../shared/types";
 import { api } from "../api";
 import { useAppStore } from "../store";
 import { ThemePicker } from "../components/ThemePicker";
+import type { LayoutId } from "../themes";
+
+function LayoutPicker() {
+  const current = useAppStore((s) => s.layout);
+  const setLayout = useAppStore((s) => s.setLayout);
+  const opts: { id: LayoutId; label: string; Icon: typeof PanelTop; hint: string }[] = [
+    { id: "topbar",  label: "Barre supérieure", Icon: PanelTop,  hint: "Dense, classique" },
+    { id: "sidebar", label: "Barre latérale",   Icon: PanelLeft, hint: "Plus de place pour les pages denses" },
+  ];
+  return (
+    <div className="grid grid-cols-2 gap-3">
+      {opts.map(({ id, label, Icon, hint }) => {
+        const active = id === current;
+        return (
+          <button
+            key={id}
+            type="button"
+            onClick={() => setLayout(id)}
+            className={`text-left rounded-lg border p-3 transition-all hover:scale-[1.01] ${
+              active
+                ? "border-accent-500 ring-2 ring-accent-500/30 bg-surface-800"
+                : "border-surface-700 bg-surface-800/50 hover:bg-surface-800"
+            }`}
+          >
+            <div className="flex items-center gap-2 mb-1.5">
+              <Icon size={16} className="text-accent-500" />
+              <span className="font-medium text-surface-100">{label}</span>
+              {active && (
+                <span className="text-[10px] uppercase tracking-wide text-accent-500 ml-auto">
+                  actif
+                </span>
+              )}
+            </div>
+            <div className="text-xs text-surface-100/60">{hint}</div>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
 
 function maskWebhook(url: string): string {
   // Discord webhooks look like https://discord.com/api/webhooks/<id>/<token>.
@@ -128,6 +169,11 @@ export function SettingsPage() {
           et mémorisé pour vos prochaines sessions.
         </p>
         <ThemePicker />
+
+        <div className="pt-2">
+          <div className="text-xs text-surface-100/60 mb-2">Disposition</div>
+          <LayoutPicker />
+        </div>
       </section>
 
       <section className="p-4 rounded-lg bg-surface-800 border border-surface-700 space-y-3">

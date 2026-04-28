@@ -776,3 +776,61 @@ main > div {
     inset 0 0 0 2px rgb(var(--color-accent-500)),
     4px 4px 0 rgb(var(--color-accent-500) / 0.5);
 }
+
+/* =================================================================== */
+/* SIDEBAR LAYOUT — per-theme polish                                    */
+/* =================================================================== */
+
+[data-theme="linear"] aside {
+  background: linear-gradient(180deg,
+    rgb(var(--color-elevated) / 1) 0%,
+    rgb(var(--color-bg) / 1) 100%);
+  backdrop-filter: blur(10px);
+}
+[data-theme="raycast"] aside {
+  background: rgb(var(--color-elevated) / 0.5);
+  backdrop-filter: blur(20px) saturate(140%);
+  border-right-color: rgb(var(--color-border) / 0.4);
+  position: relative;
+}
+[data-theme="raycast"] aside::after {
+  content: "";
+  position: absolute;
+  top: 0; right: 0; bottom: 0;
+  width: 1px;
+  background: linear-gradient(180deg,
+    transparent 0%,
+    rgb(var(--color-accent-500) / 0.4) 30%,
+    rgb(var(--color-accent-500) / 0.4) 70%,
+    transparent 100%);
+}
+[data-theme="brutalist"] aside {
+  background: rgb(var(--color-bg));
+  border-right: 2px solid rgb(var(--color-accent-500));
+}
+[data-theme="brutalist"] aside nav button {
+  border-radius: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 700;
+  font-size: 11px;
+  border-left-width: 2px !important;
+}
+[data-theme="brutalist"] aside nav button.text-accent-500 {
+  background: rgb(var(--color-accent-500));
+  color: rgb(var(--color-bg));
+  border-left-color: rgb(var(--color-accent-500)) !important;
+}
+[data-theme="brutalist"] aside nav button.text-accent-500::before {
+  content: "▸ ";
+}
+[data-theme="raycast"] aside nav button {
+  border-radius: 8px;
+}
+[data-theme="raycast"] aside nav button.text-accent-500 {
+  background: linear-gradient(135deg,
+    rgb(var(--color-accent-500) / 0.18),
+    rgb(var(--color-accent-500) / 0.05));
+  border-left: 0;
+  box-shadow: inset 0 0 0 1px rgb(var(--color-accent-500) / 0.3);
+}
