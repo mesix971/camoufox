@@ -2,7 +2,174 @@
 @tailwind components;
 @tailwind utilities;
 
-@import "./themes.css";
+/*
+ * Theme catalogue.
+ *
+ * Each block below defines the design tokens consumed by tailwind.config.js
+ * (via rgb(var(...) / <alpha-value>)). Switch themes by setting
+ * `data-theme="<id>"` on <html>; the React store does this on mount and
+ * whenever the user picks a new theme in Settings.
+ *
+ * Colors are stored as space-separated R G B triplets so Tailwind can
+ * apply alpha modifiers (e.g. bg-surface-800/70).
+ *
+ * NOTE: kept inline rather than @import-ed because the build pipeline
+ * runs the tailwindcss CLI without postcss-import, which would otherwise
+ * leave the @import unresolved in the output bundle.
+ */
+
+/* 1. CAMOUFOX (default — preserves the original look) */
+:root,
+[data-theme="camoufox"] {
+  --color-surface-50:  250 250 250;
+  --color-surface-100: 243 243 243;
+  --color-surface-200: 229 229 229;
+  --color-surface-700:  38  38  38;
+  --color-surface-800:  26  26  26;
+  --color-surface-900:  15  15  15;
+
+  --color-accent-500: 124  58 237;
+  --color-accent-600: 109  40 217;
+
+  --color-bg:         15  15  15;
+  --color-elevated:   26  26  26;
+  --color-border:     38  38  38;
+  --color-muted:      38  38  38;
+  --color-fg:        243 243 243;
+  --color-fg-muted:  163 163 163;
+  --color-success:    34 197  94;
+  --color-warning:   245 158  11;
+  --color-danger:    239  68  68;
+
+  --font-sans:    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono:    "JetBrains Mono", Menlo, Consolas, monospace;
+  --font-display: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+
+  --radius-sm: 4px;
+  --radius:    6px;
+  --radius-lg: 10px;
+
+  --shadow-soft: 0 1px 2px rgb(0 0 0 / 0.4), 0 4px 12px rgb(0 0 0 / 0.25);
+  --shadow-glow: 0 0 0 1px rgb(124 58 237 / 0.3);
+}
+
+/* 2. LINEAR — neutral cool gray + sober blue accent */
+[data-theme="linear"] {
+  --color-surface-50:  248 249 251;
+  --color-surface-100: 235 236 240;
+  --color-surface-200: 219 220 226;
+  --color-surface-700:  37  39  47;
+  --color-surface-800:  24  25  31;
+  --color-surface-900:  16  17  21;
+
+  --color-accent-500:  94 106 210;
+  --color-accent-600:  77  88 187;
+
+  --color-bg:         16  17  21;
+  --color-elevated:   24  25  31;
+  --color-border:     37  39  47;
+  --color-muted:      28  30  36;
+  --color-fg:        235 236 240;
+  --color-fg-muted:  138 142 156;
+  --color-success:    62 200 153;
+  --color-warning:   247 187  85;
+  --color-danger:    235  87  87;
+
+  --font-sans:    "Inter", "Inter Placeholder", -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono:    "JetBrains Mono", "SF Mono", Menlo, monospace;
+  --font-display: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+
+  --radius-sm: 6px;
+  --radius:    8px;
+  --radius-lg: 12px;
+
+  --shadow-soft: 0 1px 2px rgb(0 0 0 / 0.5), 0 8px 24px rgb(0 0 0 / 0.32);
+  --shadow-glow: 0 0 0 1px rgb(94 106 210 / 0.35), 0 0 24px rgb(94 106 210 / 0.18);
+}
+
+/* 3. RAYCAST — vivid coral, glassy darks, gradient-friendly */
+[data-theme="raycast"] {
+  --color-surface-50:  250 246 248;
+  --color-surface-100: 230 226 232;
+  --color-surface-200: 201 195 209;
+  --color-surface-700:  46  39  56;
+  --color-surface-800:  28  23  36;
+  --color-surface-900:  16  13  22;
+
+  --color-accent-500: 255  99  99;
+  --color-accent-600: 230  70  86;
+
+  --color-bg:         16  13  22;
+  --color-elevated:   28  23  36;
+  --color-border:     46  39  56;
+  --color-muted:      35  29  45;
+  --color-fg:        242 238 248;
+  --color-fg-muted:  168 159 188;
+  --color-success:   124 252 178;
+  --color-warning:   255 188  93;
+  --color-danger:    255  99  99;
+
+  --font-sans:    "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono:    "JetBrains Mono", "SF Mono", monospace;
+  --font-display: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+
+  --radius-sm: 8px;
+  --radius:    12px;
+  --radius-lg: 18px;
+
+  --shadow-soft: 0 2px 4px rgb(0 0 0 / 0.6), 0 12px 36px rgb(0 0 0 / 0.4);
+  --shadow-glow: 0 0 0 1px rgb(255 99 99 / 0.4), 0 0 32px rgb(255 99 99 / 0.25);
+}
+
+/* 4. BRUTALIST — terminal-grade phosphor green on near-black */
+[data-theme="brutalist"] {
+  --color-surface-50:    0 255  65;
+  --color-surface-100: 220 255 220;
+  --color-surface-200: 160 220 160;
+  --color-surface-700:  20  40  20;
+  --color-surface-800:  10  20  10;
+  --color-surface-900:   0   0   0;
+
+  --color-accent-500:   0 255  65;
+  --color-accent-600:   0 200  50;
+
+  --color-bg:           0   0   0;
+  --color-elevated:    10  20  10;
+  --color-border:       0 255  65;
+  --color-muted:       10  20  10;
+  --color-fg:           0 255  65;
+  --color-fg-muted:     0 180  46;
+  --color-success:      0 255  65;
+  --color-warning:    255 255   0;
+  --color-danger:     255   0 128;
+
+  --font-sans:    "JetBrains Mono", "IBM Plex Mono", "Fira Code", Menlo, Consolas, monospace;
+  --font-mono:    "JetBrains Mono", "IBM Plex Mono", "Fira Code", Menlo, Consolas, monospace;
+  --font-display: "JetBrains Mono", "IBM Plex Mono", "Fira Code", Menlo, Consolas, monospace;
+
+  --radius-sm: 0px;
+  --radius:    0px;
+  --radius-lg: 0px;
+
+  --shadow-soft: 0 0 0 2px rgb(0 255 65), 4px 4px 0 rgb(0 255 65 / 0.5);
+  --shadow-glow: 0 0 0 2px rgb(0 255 65), 0 0 24px rgb(0 255 65 / 0.6);
+}
+
+/* Brutalist subtle CRT scanlines. */
+[data-theme="brutalist"] body {
+  background-image: repeating-linear-gradient(
+    0deg,
+    rgb(0 255 65 / 0.02) 0px,
+    rgb(0 255 65 / 0.02) 1px,
+    transparent 1px,
+    transparent 3px
+  );
+}
+
+[data-theme="brutalist"] *::selection {
+  background-color: rgb(0 255 65);
+  color: rgb(0 0 0);
+}
 
 @layer base {
   html {

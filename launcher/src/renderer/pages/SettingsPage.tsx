@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { RatelimitStats } from "../../shared/types";
 import { api } from "../api";
 import { useAppStore } from "../store";
+import { ThemePicker } from "../components/ThemePicker";
 
 function maskWebhook(url: string): string {
   // Discord webhooks look like https://discord.com/api/webhooks/<id>/<token>.
@@ -118,6 +119,17 @@ export function SettingsPage() {
 
   return (
     <div className="h-full overflow-y-auto p-6 space-y-6 max-w-3xl">
+      <section className="p-4 rounded-lg bg-surface-800 border border-surface-700 space-y-3">
+        <div className="text-xs text-surface-100/60 uppercase tracking-wide">
+          Apparence
+        </div>
+        <p className="text-xs text-surface-100/60">
+          Choisissez le thème visuel de l'application. Le changement est immédiat
+          et mémorisé pour vos prochaines sessions.
+        </p>
+        <ThemePicker />
+      </section>
+
       <section className="p-4 rounded-lg bg-surface-800 border border-surface-700 space-y-3">
         <div className="text-xs text-surface-100/60 uppercase tracking-wide">
           Webhook Discord
