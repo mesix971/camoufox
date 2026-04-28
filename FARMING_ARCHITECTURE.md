@@ -167,6 +167,206 @@ burned_reason: Optional[str] = None
 
 ---
 
-**Fin Turn FA1.** À suivre :
-- T2 : §5 Scheduler + §6 Site catalog + §7 Behavior simulation + §8 Proxy binding
+## §5. Scheduler des sessions de farm
+
+> Quand et à quelle fréquence lancer une session farm pour un profil donné.
+
+### 5.1 Modèle de fréquence
+- **Cible** : 2–5 sessions/jour par profil en `WARMING`, 1–2/jour en `MATURE`.
+- **Durée par session** : tirée d'une distribution log-normale, médiane 25 min, σ ≈ 0.5 (range pratique 5–90 min).
+- **Espacement** : minimum 90 min entre 2 sessions du même profil (sinon pattern de bot évident).
+
+### 5.2 Distribution heure-de-jour (cohérente avec timezone du profil)
+Au lieu d'une loi uniforme, on suit une courbe d'activité humaine plausible **dans le fuseau du profil** :
+
+```
+Probabilité de spawn par heure locale (timezone profil) :
+  00-06  ▏           très faible (5%)
+  06-09  ▍▍          réveil (20%)
+  09-12  ▍▍▍▍        bureau matin (40%)
+  12-14  ▍▍▍         pause déj (30%)
+  14-18  ▍▍▍▍▍       bureau aprem (50%)
+  18-22  ▍▍▍▍▍▍▍     soirée (70%)
+  22-24  ▍▍▍         tard (30%)
+```
+
+Variation **weekend** : poids déplacés vers 10h-14h et 20h-23h.
+
+### 5.3 Job dans le scheduler existant
+Étendre `launcher/bridge/scheduler.py` avec un nouveau job :
+
+```python
+JOBS = [
+    ...,
+    ("farm_dispatcher", 300, dispatch_farm_sessions),  # toutes les 5 min
+]
+```
+
+Le dispatcher :
+1. Liste les profils `WARMING` ou `MATURE` éligibles (pas en `ACTIVE`, pas en `COOLED`).
+2. Pour chaque profil, calcule sa "due-ness" : `now - last_farmed_at >= jitter(target_interval, ±30%)`.
+3. Échantillonne selon la courbe heure-de-jour : roll un dice contre la proba locale.
+4. Si éligible, enqueue une tâche `farm-session` dans le taskqueue.
+5. Plafond global : pas plus de N sessions farm concurrentes (défaut N=10, configurable).
+
+### 5.4 Cooldown global après captcha
+Si un profil rencontre un captcha pendant une farm session, **tous les profils sur le même proxy** entrent en cooldown 1h (même IP probablement flaggée).
+
+---
+
+## §6. Site catalog
+
+> Quels sites visiter et selon quelle stratégie de rotation.
+
+### 6.1 Catégorisation
+8 catégories pondérées pour ressembler à un usage humain réel :
+
+| Catégorie | Poids | Exemples |
+|----------|-------|----------|
+| `search` | 20 | google.com, bing.com, duckduckgo.com |
+| `news` | 15 | bbc.com, cnn.com, lemonde.fr (par locale) |
+| `video` | 15 | youtube.com, dailymotion.com, twitch.tv |
+| `social` | 10 | reddit.com, x.com (lecture seulement, pas login) |
+| `ecom_browse` | 15 | amazon.com, ebay.com, etsy.com (browse, pas cart) |
+| `wiki_ref` | 10 | wikipedia.org, stackoverflow.com, mdn |
+| `weather_utility` | 5 | weather.com, accuweather.com |
+| `dev_tech` | 10 | github.com, hackernews.com (pour profils dev-archetype) |
+
+Chaque profil a un **biais** (`profile.archetype` déjà existant via `fpgen`) qui module les poids :
+- Archetype `gamer` : +30% video, +20% social, -50% news.
+- Archetype `business` : +50% news, +30% ecom_browse, -50% video.
+- Archetype `casual` : poids par défaut.
+
+### 6.2 Sélection par session
+Une farm session visite **3–8 sites** (tirage uniforme), répartis en :
+- 1 site "entry" (search engine, le plus fréquent).
+- 2–6 sites "browse" (selon catégories pondérées).
+- 1 site "exit" optionnel (retour à un site déjà connu du profil = pattern de fin de session).
+
+### 6.3 Réutilisation vs nouveauté
+- **70% des sites** : déjà visités par ce profil (revisit = signal de récurrence, accumule cookies).
+- **30% des sites** : nouveau pour ce profil (étend `unique_origins_visited`).
+
+### 6.4 Anti-pattern : ne PAS visiter les sites cibles pendant le farm
+Si le profil sera utilisé pour Nike SNKRS, **ne jamais visiter nike.com pendant le farm**. Le site cible doit voir le profil pour la première fois lors du drop (cohérent avec un humain qui découvre le drop).
+
+### 6.5 Storage du catalog
+`launcher/data/farm_catalog.json` :
+```json
+{
+  "version": 1,
+  "categories": {
+    "search": {
+      "weight": 20,
+      "sites": [
+        {"url": "https://www.google.com/search?q={query}", "params": {"query": ["news today", "weather", ...]}},
+        ...
+      ]
+    },
+    ...
+  },
+  "do_not_visit": ["nike.com", "snkrs.com", "supremenewyork.com", ...]
+}
+```
+
+Catalog éditable par l'utilisateur via UI.
+
+---
+
+## §7. Simulation de comportement in-page
+
+> Ce qui se passe une fois que le browser est sur un site pendant une farm session.
+
+### 7.1 Pattern par type de site
+
+#### `search`
+1. Naviguer vers la page de recherche.
+2. `humanlike.fill` du champ search (vitesse de frappe variable 100–300ms/char).
+3. Submit.
+4. Lire les résultats (scroll lent, pause 2–8s).
+5. Click sur le 1er–3e résultat avec proba pondérée (1er = 60%, 2e = 25%, 3e = 15%).
+6. Sortir vers le site cliqué (devient le site suivant de la session).
+
+#### `news`
+1. Land sur homepage.
+2. Scroll progressif (5–15 scrolls de 200–600px, pauses 1–4s).
+3. Click sur 1–3 articles, lire chacun (dwell ~ `len(text) / 250 mots/min`).
+4. Retour homepage entre articles 50% du temps.
+
+#### `video` (YouTube)
+1. Land sur homepage ou search.
+2. Scroll feed.
+3. Click sur 1–2 vidéos.
+4. Pause **lecture vidéo** : laisse jouer 30s–4 min (la page accumule du cookie viewer).
+5. Like/comment **jamais** (signup requis, footprint).
+
+#### `social` (Reddit, X read-only)
+1. Land sur subreddit/feed.
+2. Scroll lent.
+3. Click sur 2–4 threads.
+4. Lire (dwell), retour back.
+
+#### `ecom_browse`
+1. Land sur homepage.
+2. Search produit aléatoire (tiré d'une liste générique : "shoes", "laptop", "headphones").
+3. Click 2–3 produits.
+4. **Jamais** : add-to-cart, wishlist, account creation.
+
+### 7.2 Comportements transverses (toutes catégories)
+- `humanlike.cursor.move` entre les clicks (curve Bezier déjà implémentée).
+- Mouvements de souris **idle** : 1–3 micro-mouvements pendant les pauses (jitter 5–20px).
+- Scroll avec `humanlike.scroll` (vitesse variable, pauses).
+- **Tab/Esc/Ctrl+F** rare (~5% des sessions) — humanise.
+- Focus blur simulé : `page.evaluate("window.dispatchEvent(new Event('blur'))")` 2–4 fois par session.
+
+### 7.3 DSL de farm
+Réutiliser le DSL `actions` existant. Une farm session = un script DSL généré dynamiquement à partir du pattern par type de site. Avantage : tout passe par `run_script` qui gère déjà MAX_ACTIONS (cf. fix #3.6).
+
+```python
+def build_farm_script(profile: Profile, site: Site) -> ActionScript:
+    template = SITE_PATTERNS[site.category]
+    return template.render(profile=profile, site=site, rng=Random(profile.id))
+```
+
+---
+
+## §8. Proxy binding
+
+> La règle d'or : un profil farmé doit toujours sortir par la même IP (ou au moins le même /24 résidentiel), sinon les WAF voient un humain qui change de FAI tous les jours = bot.
+
+### 8.1 Sticky session par profil
+- Au moment du `farm_dispatcher`, on récupère le proxy assigné au profil via `profile.assigned_proxy_id`.
+- Si pas assigné, on en assigne un selon :
+  - Géo cohérente avec `profile.timezone` + `profile.locale`.
+  - Type **résidentiel** (datacenter exclu pour le farm — trop facile à fingerprinter).
+  - Sticky session activée chez le provider (iproyal `_session-{profile.id[:8]}`).
+- L'assignation est **persistante** : `profile.assigned_proxy_id` survit au restart.
+
+### 8.2 Rotation d'IP au sein d'un proxy sticky
+- Provider iproyal : sticky session jusqu'à 30 min, puis nouvelle IP **dans le même /24**.
+- Acceptable car un humain change parfois d'IP (FAI réassigne).
+- **Pas acceptable** : changement de pays ou /16 → ce serait suspect.
+
+### 8.3 Failover si proxy mort
+- Si proxy assigné est `dead` (via `proxypool.health`), le farm session est :
+  1. **Reportée** de 30 min (peut-être que c'est temporaire).
+  2. Si toujours dead après 3 reports → **réassignation** vers un proxy similaire (même provider, même géo) **avec marquage `proxy_changed_at`**.
+  3. Si pas de proxy similaire → profil entre en pause (`status=COOLED`, durée 24h).
+
+### 8.4 Anti-leak
+- WebRTC ICE : déjà fixé par le patch `webrtc-ice-candidate-order.patch` + `webrtc-ip-spoofing.patch` du fork.
+- DNS leak : Camoufox force le DNS via le proxy (vérifier dans `MaskConfig`).
+- IPv6 : désactiver (proxies IPv4 only) — pref `network.dns.disableIPv6 = true`.
+
+### 8.5 Coût
+Estimation pour 100 profils farmés à 3 sessions/jour × 25 min médiane :
+- 100 × 3 × 25 / 60 = **125 h-proxy/jour**
+- Bande passante moyenne ~50 MB/session (pages + vidéo YT) × 300 sessions = **15 GB/jour**
+- Coût iproyal résidentiel : ~$5/GB → **~75 $/jour pour 100 profils en farm continu**
+
+⇒ Le farm est **cher** ; il faut prioriser quels profils farmer (cf. §11 priorisation).
+
+---
+
+**Fin Turn FA2.** À suivre :
 - T3 : §9 Failure modes + §10 Intégration modules + §11 Data model + §12 CLI/UI + §13 Open questions
