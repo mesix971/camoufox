@@ -13,7 +13,7 @@
     "build:main": "tsc -p tsconfig.main.json",
     "build:renderer": "esbuild src/renderer/index.tsx --bundle --outfile=dist/renderer/bundle.js --loader:.tsx=tsx --loader:.ts=ts --format=iife --target=es2022",
     "build:css": "tailwindcss -i src/renderer/styles.css -o dist/renderer/styles.css",
-    "build:html": "cp index.html dist/renderer/index.html",
+    "build:html": "node -e \"require('fs').mkdirSync('dist/renderer',{recursive:true});require('fs').copyFileSync('index.html','dist/renderer/index.html')\"",
     "build": "npm run build:main && npm run build:renderer && npm run build:css && npm run build:html",
     "watch:main": "tsc -p tsconfig.main.json --watch",
     "watch:renderer": "esbuild src/renderer/index.tsx --bundle --outfile=dist/renderer/bundle.js --loader:.tsx=tsx --loader:.ts=ts --format=iife --target=es2022 --watch",
