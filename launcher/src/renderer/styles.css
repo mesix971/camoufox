@@ -1169,3 +1169,153 @@ main > div {
   vertical-align: middle;
   box-shadow: 0 0 6px currentColor;
 }
+
+/* =================================================================== */
+/* PAGE HEADER — per-theme signature decoration                         */
+/* =================================================================== */
+
+.page-header {
+  background: linear-gradient(180deg,
+    rgb(var(--color-elevated) / 0.6) 0%,
+    rgb(var(--color-bg) / 0) 100%);
+}
+
+/* CAMOUFOX (default): subtle violet grid wash on the right edge. */
+:root .page-header::before,
+[data-theme="camoufox"] .page-header::before {
+  content: "";
+  position: absolute;
+  top: 0; right: 0; bottom: 0;
+  width: 280px;
+  background:
+    radial-gradient(circle at 100% 50%,
+      rgb(var(--color-accent-500) / 0.08), transparent 70%);
+  pointer-events: none;
+}
+
+/* LINEAR: dotted grid + gradient hairline at bottom. */
+[data-theme="linear"] .page-header {
+  background:
+    radial-gradient(circle at 1px 1px, rgb(var(--color-fg) / 0.05) 1px, transparent 0),
+    linear-gradient(180deg, rgb(var(--color-elevated)) 0%, rgb(var(--color-bg)) 100%);
+  background-size: 24px 24px, 100% 100%;
+  border-bottom: 0;
+  position: relative;
+}
+[data-theme="linear"] .page-header::after {
+  content: "";
+  position: absolute;
+  left: 24px; right: 24px; bottom: 0;
+  height: 1px;
+  background: linear-gradient(90deg,
+    transparent 0%,
+    rgb(var(--color-border)) 20%,
+    rgb(var(--color-border)) 80%,
+    transparent 100%);
+}
+[data-theme="linear"] .page-header-title {
+  font-weight: 600;
+  letter-spacing: -0.025em;
+}
+[data-theme="linear"] .page-header-icon {
+  border-radius: 8px;
+  background: linear-gradient(180deg,
+    rgb(var(--color-accent-500) / 0.18),
+    rgb(var(--color-accent-500) / 0.05));
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.05),
+    0 0 0 1px rgb(var(--color-accent-500) / 0.2),
+    0 4px 16px rgb(var(--color-accent-500) / 0.15);
+}
+
+/* RAYCAST: big chromatic blob behind the icon, gradient title text. */
+[data-theme="raycast"] .page-header {
+  padding-top: 1.75rem;
+  padding-bottom: 1.75rem;
+  background:
+    radial-gradient(ellipse 240px 120px at 60px 50%,
+      rgb(var(--color-accent-500) / 0.18), transparent 70%),
+    radial-gradient(ellipse 320px 160px at 100% 100%,
+      rgb(255 99 200 / 0.10), transparent 70%),
+    linear-gradient(180deg,
+      rgb(var(--color-elevated) / 0.5) 0%,
+      rgb(var(--color-bg) / 0.2) 100%);
+  border-bottom-color: rgb(var(--color-border) / 0.4);
+  backdrop-filter: blur(8px);
+}
+[data-theme="raycast"] .page-header-title {
+  font-size: 1.75rem;
+  background: linear-gradient(135deg,
+    rgb(var(--color-fg)) 0%,
+    rgb(var(--color-accent-500)) 60%,
+    rgb(255 130 200) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  letter-spacing: -0.03em;
+  font-weight: 700;
+}
+[data-theme="raycast"] .page-header-icon {
+  border-radius: 14px;
+  width: 52px; height: 52px;
+  background: linear-gradient(135deg,
+    rgb(var(--color-accent-500) / 0.3),
+    rgb(255 99 200 / 0.15));
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.15),
+    0 0 0 1px rgb(var(--color-accent-500) / 0.4),
+    0 8px 32px rgb(var(--color-accent-500) / 0.3),
+    0 0 60px rgb(var(--color-accent-500) / 0.2);
+}
+
+/* BRUTALIST: ASCII frame, monospace, terminal style. */
+[data-theme="brutalist"] .page-header {
+  background: rgb(var(--color-bg));
+  border-bottom: 2px solid rgb(var(--color-accent-500));
+  position: relative;
+}
+[data-theme="brutalist"] .page-header::before {
+  content: "";
+  position: absolute;
+  inset: 8px 8px 12px 8px;
+  border: 1px solid rgb(var(--color-accent-500) / 0.4);
+  pointer-events: none;
+}
+[data-theme="brutalist"] .page-header::after {
+  content: "── SYS::READY ──";
+  position: absolute;
+  top: 4px; right: 16px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.15em;
+  color: rgb(var(--color-accent-500) / 0.6);
+  text-transform: uppercase;
+}
+[data-theme="brutalist"] .page-header-title {
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 700;
+  font-size: 1.4rem;
+}
+[data-theme="brutalist"] .page-header-title::before {
+  content: "$ ";
+  color: rgb(var(--color-accent-500) / 0.7);
+}
+[data-theme="brutalist"] .page-header-subtitle {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+[data-theme="brutalist"] .page-header-subtitle::before {
+  content: "// ";
+  color: rgb(var(--color-accent-500) / 0.5);
+}
+[data-theme="brutalist"] .page-header-icon {
+  border-radius: 0;
+  background: rgb(var(--color-accent-500));
+  color: rgb(var(--color-bg));
+  border-color: rgb(var(--color-accent-500));
+  box-shadow: 3px 3px 0 rgb(var(--color-accent-500) / 0.4);
+}

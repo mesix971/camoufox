@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
+import { Users, RefreshCw, Upload, Plus } from "lucide-react";
 import type { CreepJSScore, ProfileSummary } from "../../shared/types";
 import { api } from "../api";
 import { BindProxyModal } from "../components/BindProxyModal";
 import { ImportProfileModal } from "../components/ImportProfileModal";
 import { LaunchSessionModal } from "../components/LaunchSessionModal";
 import { NewProfileModal } from "../components/NewProfileModal";
+import { PageHeader } from "../components/PageHeader";
 import { ProfileEditModal } from "../components/ProfileEditModal";
 import { TagList } from "../components/TagPill";
 import { useAppStore } from "../store";
@@ -111,23 +113,28 @@ export function ProfilesPage() {
 
   return (
     <div className="h-full flex flex-col">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-surface-700">
-        <div className="flex items-center gap-3">
-          <h2 className="text-lg font-semibold">Profils</h2>
-          <span className="text-xs text-surface-100/60">{profiles.length} total</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <button type="button" className="btn-ghost" onClick={() => refreshProfiles()} disabled={profilesLoading}>
-            {profilesLoading ? "..." : "Rafraîchir"}
-          </button>
-          <button type="button" className="btn-ghost" onClick={() => setShowImport(true)}>
-            Importer
-          </button>
-          <button type="button" className="btn-primary" onClick={() => setShowNew(true)}>
-            + Nouveau profil
-          </button>
-        </div>
-      </div>
+      <PageHeader
+        title="Profils"
+        subtitle="Empreintes digitales générées et bibliothèque réutilisable."
+        icon={Users}
+        badge={{ label: `${profiles.length} total`, tone: "neutral" }}
+        actions={
+          <>
+            <button type="button" className="btn-ghost" onClick={() => refreshProfiles()} disabled={profilesLoading}>
+              <RefreshCw size={14} className={profilesLoading ? "animate-spin" : ""} />
+              {profilesLoading ? "..." : "Rafraîchir"}
+            </button>
+            <button type="button" className="btn-ghost" onClick={() => setShowImport(true)}>
+              <Upload size={14} />
+              Importer
+            </button>
+            <button type="button" className="btn-primary" onClick={() => setShowNew(true)}>
+              <Plus size={14} strokeWidth={2.5} />
+              Nouveau profil
+            </button>
+          </>
+        }
+      />
 
       {profilesError && (
         <div className="px-4 py-2 bg-red-900/60 text-red-200 text-sm border-b border-red-800">

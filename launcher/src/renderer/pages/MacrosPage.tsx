@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
+import { Wand2, RefreshCw, Circle, Plus } from "lucide-react";
 import type { Macro } from "../../shared/types";
 import { api } from "../api";
 import { MacroEditModal } from "../components/MacroEditModal";
+import { PageHeader } from "../components/PageHeader";
 import { RunMacroModal } from "../components/RunMacroModal";
 import { useAppStore } from "../store";
 
@@ -47,28 +49,28 @@ export function MacrosPage() {
 
   return (
     <div className="h-full flex flex-col">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-surface-700">
-        <div className="flex items-center gap-3">
-          <h2 className="text-lg font-semibold">Macros</h2>
-          <span className="text-xs text-surface-100/60">{macros.length} total</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            className="btn-ghost"
-            onClick={() => refreshMacros()}
-            disabled={macrosLoading}
-          >
-            {macrosLoading ? "..." : "Rafraîchir"}
-          </button>
-          <button type="button" className="btn-ghost" onClick={() => setRecordOpen(true)}>
-            + Enregistrer
-          </button>
-          <button type="button" className="btn-primary" onClick={openNew}>
-            + Nouvelle macro
-          </button>
-        </div>
-      </div>
+<PageHeader
+        title="Macros"
+        subtitle="Scripts d'actions enregistrés et rejouables — DSL Camoufox."
+        icon={Wand2}
+        badge={{ label: `${macros.length} total`, tone: "neutral" }}
+        actions={
+          <>
+            <button type="button" className="btn-ghost" onClick={() => refreshMacros()} disabled={macrosLoading}>
+              <RefreshCw size={14} className={macrosLoading ? "animate-spin" : ""} />
+              {macrosLoading ? "..." : "Rafraîchir"}
+            </button>
+            <button type="button" className="btn-ghost" onClick={() => setRecordOpen(true)}>
+              <Circle size={14} className="fill-red-500 text-red-500" />
+              Enregistrer
+            </button>
+            <button type="button" className="btn-primary" onClick={openNew}>
+              <Plus size={14} strokeWidth={2.5} />
+              Nouvelle macro
+            </button>
+          </>
+        }
+      />
 
       {macrosError && (
         <div className="px-4 py-2 bg-red-900/60 text-red-200 text-sm border-b border-red-800">

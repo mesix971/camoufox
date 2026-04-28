@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
+import { ListChecks, RefreshCw, Plus } from "lucide-react";
 import type { Task, TaskStatus } from "../../shared/types";
 import { api } from "../api";
 import { StatusBadge } from "../components/Badge";
 import { NewTaskModal } from "../components/NewTaskModal";
+import { PageHeader } from "../components/PageHeader";
 import { TagList } from "../components/TagPill";
 import { useAppStore } from "../store";
 
@@ -51,25 +53,24 @@ export function TasksPage() {
 
   return (
     <div className="h-full flex flex-col">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-surface-700">
-        <div className="flex items-center gap-3">
-          <h2 className="text-lg font-semibold">Tâches</h2>
-          <span className="text-xs text-surface-100/60">{tasks.length} total</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            className="btn-ghost"
-            onClick={() => refreshTasks()}
-            disabled={tasksLoading}
-          >
-            {tasksLoading ? "..." : "Rafraîchir"}
-          </button>
-          <button type="button" className="btn-primary" onClick={() => setShowNew(true)}>
-            + Nouvelle tâche
-          </button>
-        </div>
-      </div>
+<PageHeader
+        title="Tâches"
+        subtitle="Files d'attente planifiées et workers — backoff, retries, exécution."
+        icon={ListChecks}
+        badge={{ label: `${tasks.length} total`, tone: "neutral" }}
+        actions={
+          <>
+            <button type="button" className="btn-ghost" onClick={() => refreshTasks()} disabled={tasksLoading}>
+              <RefreshCw size={14} className={tasksLoading ? "animate-spin" : ""} />
+              {tasksLoading ? "..." : "Rafraîchir"}
+            </button>
+            <button type="button" className="btn-primary" onClick={() => setShowNew(true)}>
+              <Plus size={14} strokeWidth={2.5} />
+              Nouvelle tâche
+            </button>
+          </>
+        }
+      />
 
       <div className="px-4 py-3 border-b border-surface-700 flex flex-wrap items-center gap-2">
         {STATUS_ORDER.map((s) => (

@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
+import { Monitor, RefreshCw, Trash2, Layers, Zap } from "lucide-react";
 import { api } from "../api";
 import { StatusBadge } from "../components/Badge";
 import { BatchLaunchModal } from "../components/BatchLaunchModal";
 import { LaunchSessionModal } from "../components/LaunchSessionModal";
 import { Modal } from "../components/Modal";
+import { PageHeader } from "../components/PageHeader";
 import { useAppStore } from "../store";
 
 export function SessionsPage() {
@@ -86,26 +88,35 @@ export function SessionsPage() {
 
   return (
     <div className="h-full flex flex-col">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-surface-700">
-        <div className="flex items-center gap-3">
-          <h2 className="text-lg font-semibold">Sessions</h2>
-          <span className="text-xs text-surface-100/60">
-            {runningCount} actives / {sessions.length} total
-          </span>
-        </div>
-        <div className="flex items-center gap-2">
-          <button type="button" className="btn-ghost" onClick={prune}>Purger arrêtées</button>
-          <button type="button" className="btn-ghost" onClick={() => refreshSessions()} disabled={sessionsLoading}>
-            Rafraîchir
-          </button>
-          <button type="button" className="btn-ghost" onClick={() => setShowBatch(true)}>
-            + Lot
-          </button>
-          <button type="button" className="btn-primary" onClick={() => setShowLaunch(true)}>
-            + Lancer
-          </button>
-        </div>
-      </div>
+<PageHeader
+        title="Sessions"
+        subtitle="Browsers Camoufox actifs — métriques, contrôle, historique."
+        icon={Monitor}
+        badge={{
+          label: `${runningCount} actives / ${sessions.length}`,
+          tone: runningCount > 0 ? "success" : "neutral",
+        }}
+        actions={
+          <>
+            <button type="button" className="btn-ghost" onClick={prune}>
+              <Trash2 size={14} />
+              Purger
+            </button>
+            <button type="button" className="btn-ghost" onClick={() => refreshSessions()} disabled={sessionsLoading}>
+              <RefreshCw size={14} className={sessionsLoading ? "animate-spin" : ""} />
+              Rafraîchir
+            </button>
+            <button type="button" className="btn-ghost" onClick={() => setShowBatch(true)}>
+              <Layers size={14} />
+              Lot
+            </button>
+            <button type="button" className="btn-primary" onClick={() => setShowLaunch(true)}>
+              <Zap size={14} strokeWidth={2.5} />
+              Lancer
+            </button>
+          </>
+        }
+      />
 
       {sessionsError && (
         <div className="px-4 py-2 bg-red-900/60 text-red-200 text-sm border-b border-red-800">

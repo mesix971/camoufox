@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
-import { PanelTop, PanelLeft } from "lucide-react";
+import { PanelTop, PanelLeft, Settings as SettingsIcon } from "lucide-react";
 import type { RatelimitStats } from "../../shared/types";
 import { api } from "../api";
 import { useAppStore } from "../store";
+import { PageHeader } from "../components/PageHeader";
 import { ThemePicker } from "../components/ThemePicker";
 import type { LayoutId } from "../themes";
 
@@ -159,7 +160,14 @@ export function SettingsPage() {
   const hostRows = Object.entries(stats).sort((a, b) => a[0].localeCompare(b[0]));
 
   return (
-    <div className="h-full overflow-y-auto p-6 space-y-6 max-w-3xl">
+    <div className="h-full overflow-y-auto">
+      <PageHeader
+        title="Paramètres"
+        subtitle="Apparence, intégrations webhook, limites de débit par hôte."
+        icon={SettingsIcon}
+      />
+
+      <div className="p-6 space-y-6 max-w-3xl">
       <section className="p-4 rounded-lg bg-surface-800 border border-surface-700 space-y-3">
         <div className="text-xs text-surface-100/60 uppercase tracking-wide">
           Apparence
@@ -285,6 +293,7 @@ export function SettingsPage() {
           </button>
         </div>
       </section>
+      </div>
     </div>
   );
 }

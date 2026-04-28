@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import {
   Users, Globe, Monitor, Cpu, MemoryStick, Activity,
-  Zap, ArrowUpRight, type LucideIcon,
+  Zap, ArrowUpRight, LayoutDashboard, type LucideIcon,
 } from "lucide-react";
 import type { DashboardSummary, SessionMetricsReport } from "../../shared/types";
 import { api } from "../api";
 import { StatusBadge } from "../components/Badge";
+import { PageHeader } from "../components/PageHeader";
 import { formatBytes } from "./SessionsPage";
 import { useAppStore } from "../store";
 
@@ -58,7 +59,19 @@ export function DashboardPage() {
   }
 
   return (
-    <div className="h-full overflow-y-auto p-6 space-y-6">
+    <div className="h-full overflow-y-auto">
+      <PageHeader
+        title="Tableau de bord"
+        subtitle="Vue d'ensemble — profils, proxies, sessions et état du système."
+        icon={LayoutDashboard}
+        badge={
+          summary.sessions.running > 0
+            ? { label: `${summary.sessions.running} en cours`, tone: "success" }
+            : undefined
+        }
+      />
+
+      <div className="p-6 space-y-6">
       <div className="grid grid-cols-3 gap-4">
         <Stat
           title="Profils"
@@ -135,6 +148,7 @@ export function DashboardPage() {
         <Panel title="Système">
           <SystemPanel metrics={metrics} />
         </Panel>
+      </div>
       </div>
     </div>
   );

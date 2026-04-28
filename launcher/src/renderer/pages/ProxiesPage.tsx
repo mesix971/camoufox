@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
+import { Globe, RefreshCw, ShieldCheck, Plus } from "lucide-react";
 import { api } from "../api";
 import { StatusBadge } from "../components/Badge";
 import { ImportProxiesModal } from "../components/ImportProxiesModal";
+import { PageHeader } from "../components/PageHeader";
 import { useAppStore } from "../store";
 
 export function ProxiesPage() {
@@ -60,36 +62,39 @@ export function ProxiesPage() {
 
   return (
     <div className="h-full flex flex-col">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-surface-700">
-        <div className="flex items-center gap-3">
-          <h2 className="text-lg font-semibold">Proxies</h2>
-          <span className="text-xs text-surface-100/60">
-            {visible.length} / {proxies.length}
-          </span>
-          <select
-            className="input !w-auto !py-1 !text-xs"
-            value={filter}
-            onChange={(e) => setFilter(e.target.value as typeof filter)}
-          >
-            <option value="all">tous</option>
-            <option value="active">actifs</option>
-            <option value="untested">non testés</option>
-            <option value="flagged">signalés</option>
-            <option value="dead">morts</option>
-          </select>
-        </div>
-        <div className="flex items-center gap-2">
-          <button type="button" className="btn-ghost" onClick={checkAll} disabled={checking}>
-            {checking ? "Vérification..." : "Tout vérifier"}
-          </button>
-          <button type="button" className="btn-ghost" onClick={() => refreshProxies()} disabled={proxiesLoading}>
-            Rafraîchir
-          </button>
-          <button type="button" className="btn-primary" onClick={() => setShowImport(true)}>
-            + Importer
-          </button>
-        </div>
-      </div>
+<PageHeader
+        title="Proxies"
+        subtitle="Pool de connexions sortantes — santé, géo, rotation."
+        icon={Globe}
+        badge={{ label: `${visible.length} / ${proxies.length}`, tone: "neutral" }}
+        actions={
+          <>
+            <select
+              className="input !w-auto !py-1.5 !text-xs"
+              value={filter}
+              onChange={(e) => setFilter(e.target.value as typeof filter)}
+            >
+              <option value="all">tous</option>
+              <option value="active">actifs</option>
+              <option value="untested">non testés</option>
+              <option value="flagged">signalés</option>
+              <option value="dead">morts</option>
+            </select>
+            <button type="button" className="btn-ghost" onClick={checkAll} disabled={checking}>
+              <ShieldCheck size={14} />
+              {checking ? "Vérification..." : "Tout vérifier"}
+            </button>
+            <button type="button" className="btn-ghost" onClick={() => refreshProxies()} disabled={proxiesLoading}>
+              <RefreshCw size={14} className={proxiesLoading ? "animate-spin" : ""} />
+              Rafraîchir
+            </button>
+            <button type="button" className="btn-primary" onClick={() => setShowImport(true)}>
+              <Plus size={14} strokeWidth={2.5} />
+              Importer
+            </button>
+          </>
+        }
+      />
 
       {proxiesError && (
         <div className="px-4 py-2 bg-red-900/60 text-red-200 text-sm border-b border-red-800">
