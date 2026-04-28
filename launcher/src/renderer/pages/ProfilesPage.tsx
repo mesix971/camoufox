@@ -2,12 +2,14 @@ import { useEffect, useState } from "react";
 import { Users, RefreshCw, Upload, Plus } from "lucide-react";
 import type { CreepJSScore, ProfileSummary } from "../../shared/types";
 import { api } from "../api";
+import { Avatar } from "../components/Avatar";
 import { BindProxyModal } from "../components/BindProxyModal";
 import { ImportProfileModal } from "../components/ImportProfileModal";
 import { LaunchSessionModal } from "../components/LaunchSessionModal";
 import { NewProfileModal } from "../components/NewProfileModal";
 import { PageHeader } from "../components/PageHeader";
 import { ProfileEditModal } from "../components/ProfileEditModal";
+import { SkeletonTable } from "../components/Skeleton";
 import { TagList } from "../components/TagPill";
 import { useAppStore } from "../store";
 
@@ -144,9 +146,7 @@ export function ProfilesPage() {
 
       <div className="flex-1 overflow-y-auto">
         {profiles.length === 0 && !profilesLoading && (
-          <div className="p-8 text-center text-surface-100/50">
-            Aucun profil pour le moment. Cliquez sur <b>+ Nouveau profil</b> pour en générer un.
-          </div>
+          <EmptyProfiles onNew={() => setShowNew(true)} />
         )}
         <table className="w-full text-sm">
           <thead className="text-xs uppercase text-surface-100/50 bg-surface-800/60 sticky top-0">
@@ -163,10 +163,14 @@ export function ProfilesPage() {
             </tr>
           </thead>
           <tbody>
+            {profilesLoading && profiles.length === 0 && (
+              <SkeletonTable rows={5} columns={8} withAvatar />
+            )}
             {profiles.map((p) => (
               <tr key={p.id} className="table-row">
                 <td className="px-4 py-2 font-medium">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2.5">
+                    <Avatar id={p.id} name={p.name} size={28} />
                     <span>{p.name}</span>
                     <CreepJSBadge score={creepjsScores[p.id]} />
                   </div>
@@ -257,6 +261,27 @@ export function ProfilesPage() {
         onClose={() => setEditFor(null)}
         profile={editFor}
       />
+    </div>
+  );
+}
+
+function EmptyProfiles({ onNew }: { onNew: () => void }) {
+  return (
+    <div className="empty-state px-6 py-16 text-center">
+      <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl
+                      bg-accent-500/10 border border-accent-500/30 mb-4
+                      shadow-[0_0_48px] shadow-accent-500/20">
+        <Users size={28} className="text-accent-500" strokeWidth={1.5} />
+      </div>
+      <h3 className="text-lg font-semibold text-surface-100">Aucun profil</h3>
+      <p className="text-sm text-surface-100/55 mt-1 max-w-md mx-auto">
+        Un profil regroupe une empreinte de navigateur cohérente — fingerprint
+        WebGL, fonts, écran, locale, fuseau. Lancez-en un pour démarrer.
+      </p>
+      <button type="button" className="btn-primary mt-5 mx-auto" onClick={onNew}>
+        <Plus size={14} strokeWidth={2.5} />
+        Créer mon premier profil
+      </button>
     </div>
   );
 }

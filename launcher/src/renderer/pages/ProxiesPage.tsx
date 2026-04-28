@@ -4,6 +4,7 @@ import { api } from "../api";
 import { StatusBadge } from "../components/Badge";
 import { ImportProxiesModal } from "../components/ImportProxiesModal";
 import { PageHeader } from "../components/PageHeader";
+import { SkeletonTable } from "../components/Skeleton";
 import { useAppStore } from "../store";
 
 export function ProxiesPage() {
@@ -104,8 +105,20 @@ export function ProxiesPage() {
 
       <div className="flex-1 overflow-y-auto">
         {visible.length === 0 && !proxiesLoading && (
-          <div className="p-8 text-center text-surface-100/50">
-            Aucun proxy. Cliquez sur <b>+ Importer</b> pour coller une liste.
+          <div className="empty-state px-6 py-16 text-center">
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl
+                            bg-accent-500/10 border border-accent-500/30 mb-4">
+              <Globe size={28} className="text-accent-500" strokeWidth={1.5} />
+            </div>
+            <h3 className="text-lg font-semibold text-surface-100">Aucun proxy</h3>
+            <p className="text-sm text-surface-100/55 mt-1 max-w-md mx-auto">
+              Importez une liste de proxies (URL, flat, plusieurs lignes) pour
+              commencer à les binder à vos profils.
+            </p>
+            <button type="button" className="btn-primary mt-5 mx-auto" onClick={() => setShowImport(true)}>
+              <Plus size={14} strokeWidth={2.5} />
+              Importer des proxies
+            </button>
           </div>
         )}
         <table className="w-full text-sm">
@@ -123,6 +136,9 @@ export function ProxiesPage() {
             </tr>
           </thead>
           <tbody>
+            {proxiesLoading && visible.length === 0 && (
+              <SkeletonTable rows={5} columns={9} />
+            )}
             {visible.map((p) => (
               <tr key={p.id} className="table-row">
                 <td className="px-4 py-2"><StatusBadge status={p.status} /></td>
