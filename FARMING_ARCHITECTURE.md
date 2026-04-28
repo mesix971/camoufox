@@ -368,5 +368,257 @@ Estimation pour 100 profils farmés à 3 sessions/jour × 25 min médiane :
 
 ---
 
-**Fin Turn FA2.** À suivre :
-- T3 : §9 Failure modes + §10 Intégration modules + §11 Data model + §12 CLI/UI + §13 Open questions
+## §9. Failure modes & recovery
+
+> Tout ce qui peut mal tourner pendant un farm, et comment le système réagit.
+
+| Symptôme | Cause probable | Action |
+|----------|----------------|--------|
+| Captcha hard rencontré (Cloudflare interstitial) | IP suspectée | Marquer `captcha_encounters`, abort session, **cooldown 6h sur le proxy entier** |
+| 403 sustainedly sur un site | IP banned ou profil flagged | `BURNED` si récurrent, sinon `COOLED` 24h |
+| Profil crash mid-farm | Process died | Relancer 1× (retry policy taskqueue), 2e échec → marquer session FAILED, decrement maturity |
+| Proxy mort pendant session | Provider down ou IP rotated trop tôt | Retry 30 min, sinon réassignation |
+| Site cible (do-not-visit) accidentellement chargé | Lien dans une page browse | Abort immédiat, `last_browse_url` purgé du history |
+| `MAX_ACTIONS_PER_RUN` atteint | Bug dans pattern, redirect loop | Log warning, profil OK, juste session tronquée |
+| Disk full (user_data_dir) | Cache YouTube monstrueux accumulé | Quota 500 MB/profil, purge cache si dépassé |
+| Profil flag par browser detection (`__cf_bm` invalide) | Trop de bot signals envoyés | `BURNED` |
+
+### 9.1 Détecteurs internes
+- **Captcha detector** (réutilise le code `_detect_and_solve_captcha` du `session_runner.py:58`) : présence d'iframe Turnstile/reCAPTCHA/hCaptcha = signal d'échec.
+- **403/blocked detector** : compteur de réponses HTTP ≥ 400 sur les sites visités. Si > 3 sur la session → fail.
+- **Profile bloat detector** : `du -sh user_data_dir` > 500 MB → trigger cleanup (purge cache HTTP, garde cookies + localStorage).
+
+### 9.2 Métriques exportées
+À chaque farm session, push dans le store :
+```json
+{
+  "profile_id": "...",
+  "session_id": "...",
+  "started_at": "...",
+  "duration_seconds": 1245,
+  "sites_visited": ["google.com", "youtube.com", ...],
+  "categories_touched": ["search", "video"],
+  "captcha_encountered": false,
+  "errors": [],
+  "maturity_before": 42,
+  "maturity_after": 47
+}
+```
+
+Logs accessibles via UI pour debugger un profil qui régresse.
+
+---
+
+## §10. Intégration avec les modules existants
+
+> Comment le farming se branche sur le toolkit actuel sans tout casser.
+
+### 10.1 Modules réutilisés tels quels
+- **`fpgen`** : pas de changement à la génération du profil. Juste ajout des champs §4.4 au dataclass `Profile`.
+- **`proxypool`** : ajouter `assigned_to_profile: Optional[str]` au dataclass `Proxy` pour visibilité.
+- **`taskqueue`** : nouvelle action type `farm-session` (cf. §10.4).
+- **`humanlike`** : utilisé tel quel pour mouse/keyboard.
+- **`actions`** (DSL) : utilisé tel quel pour exprimer les patterns farm.
+- **`launcher.bridge.sessions`** : utilisé tel quel — le farm session est un subprocess Camoufox standard.
+- **`launcher.bridge.scheduler`** : nouveau job `farm_dispatcher` ajouté à `JOBS`.
+
+### 10.2 Nouveau module : `farming/`
+```
+farming/
+├── __init__.py
+├── catalog.py        # site catalog loader
+├── patterns.py       # patterns par catégorie (search, news, video, ...)
+├── builder.py        # build_farm_script(profile, site) -> ActionScript
+├── scheduler.py      # eligibility logic, hour-of-day curve
+├── maturity.py       # maturity_score(profile) -> int
+├── lifecycle.py      # status transitions (FRESH ↔ WARMING ↔ MATURE ↔ ...)
+├── data/
+│   └── farm_catalog.json
+└── tests/
+    ├── test_maturity.py
+    ├── test_scheduler.py
+    ├── test_patterns.py
+    └── test_lifecycle.py
+```
+
+### 10.3 Nouvelles commandes du bridge (`launcher.bridge.commands`)
+- `farm_start <profile_id>` : enqueue immédiatement une farm session.
+- `farm_stop <profile_id>` : annule les farm sessions en cours pour ce profil.
+- `farm_status` : tableau de tous les profils avec status + maturity_score + last_farmed.
+- `farm_catalog_list` : retourne le contenu du catalog.
+- `farm_catalog_set <category> <url>` : ajoute un site au catalog.
+- `farm_burn <profile_id> <reason>` : marque manuellement comme `BURNED`.
+- `farm_unburn <profile_id>` : retire le statut `BURNED` (manuel, après vérif).
+- `farm_set_archetype <profile_id> <archetype>` : modifie le biais des poids catégories.
+- `farm_metrics` : statistiques globales (sessions/jour, taux captcha, coût proxy estimé).
+
+### 10.4 Nouveau type d'action taskqueue : `farm-session`
+```json
+{
+  "type": "farm-session",
+  "profile_id": "abc123",
+  "duration_minutes": 25,
+  "site_count": 5,
+  "rng_seed": 12345
+}
+```
+
+Handler dans `task_worker.py` :
+```python
+def _dispatch_farm(action: Dict) -> Dict:
+    from farming.builder import build_farm_script
+    from farming.lifecycle import on_farm_started, on_farm_finished
+    profile_id = action["profile_id"]
+    on_farm_started(profile_id)  # acquires lock, sets WARMING if FRESH
+    script = build_farm_script(profile_id, ...)
+    # Spawn session with the script auto-loaded
+    s = mgr.spawn(profile_id=profile_id, run_macro=script.serialize_inline(),
+                  persistent=True, headless=True)
+    # Wait for completion
+    wait_for_session_done(s.id, timeout=action["duration_minutes"]*60+120)
+    on_farm_finished(profile_id, success=True)
+    return {"session_id": s.id}
+```
+
+### 10.5 Tests d'intégration nécessaires
+- `farm_dispatcher` ne lance pas plus de N sessions concurrentes (plafond global).
+- Profil `BURNED` ne reçoit pas de farm session.
+- Sticky proxy assignation persiste entre dispatcher invocations.
+- `maturity_score` recalculé à chaque appel reflète les changements de `unique_origins_visited`.
+
+---
+
+## §11. Data model — modifications nécessaires
+
+### 11.1 `fpgen.Profile` — ajouts
+Cf. §4.4 (status, first_farmed_at, etc.).
+
+### 11.2 `proxypool.Proxy` — ajouts
+```python
+assigned_to_profile: Optional[str] = None  # profile_id sticky
+last_assigned_at: Optional[str] = None
+```
+
+### 11.3 Nouveau store : `farming.SessionMetrics`
+Une entrée par farm session pour audit/debug.
+
+```python
+@dataclass
+class FarmSessionMetric:
+    session_id: str
+    profile_id: str
+    started_at: str
+    finished_at: str
+    duration_seconds: float
+    sites_visited: List[str]
+    categories_touched: List[str]
+    captcha_encountered: bool
+    errors: List[str]
+    maturity_before: int
+    maturity_after: int
+```
+
+Stocké dans `~/.camoufox/farming/metrics/<YYYY-MM-DD>/<session_id>.json` (rotation par jour, purge > 90 jours).
+
+### 11.4 Schema versioning
+Ajouter `schema_version: int = 2` au `Profile` pour migration auto des profils créés avant le farm system. Migration : tous les profils v1 démarrent en `FRESH` avec metrics vides.
+
+### 11.5 Priorisation des profils à farmer
+Quand le budget proxy est limité, prioriser :
+1. Profils `WARMING` proches du seuil MATURE (60). Effort marginal le plus rentable.
+2. Profils `MATURE` qui décroissent (decay > 5 points sous le seuil). Peu de farm pour les remonter.
+3. Profils `COOLED` arrivant en fin de cooldown.
+4. Profils `MATURE` haut score → farm minimal (1×/jour) juste pour entretenir.
+
+Score de priorité : `priority = max(0, MATURE_THRESHOLD - maturity_score) + days_since_last_farm × 5`.
+
+---
+
+## §12. CLI / UI
+
+### 12.1 Onglet "Farming" dans l'UI Electron
+Nouveau tab principal :
+- **Vue Profils** : table avec colonnes `name | status | maturity | last_farmed | proxy | actions`.
+- **Filtres** : par status (FRESH/WARMING/MATURE/...), par archetype, par maturity range.
+- **Actions inline** : start farm now, view metrics, burn, unburn, edit archetype.
+- **Vue Globale** :
+  - Graphique : nombre de sessions farm par jour (7 derniers jours).
+  - Graphique : distribution des maturity scores.
+  - Compteur : profils prêts pour drop (`MATURE` count).
+  - Coût proxy estimé / mois.
+- **Vue Catalog** : éditeur du `farm_catalog.json`, drag-and-drop pour réorganiser.
+- **Vue Métriques** : drill-down par session (logs, sites visités, durée).
+
+### 12.2 CLI
+```bash
+# Démarrer le scheduler farm
+python -m launcher.bridge.scheduler --enable-farm
+
+# Status global
+python -m launcher.bridge farm_status
+
+# Farmer un profil immédiatement
+python -m launcher.bridge farm_start --profile-id abc123
+
+# Voir les métriques d'un profil
+python -m launcher.bridge farm_metrics --profile-id abc123 --days 7
+```
+
+### 12.3 Notifications webhook
+Événements importants :
+- Profil atteint `MATURE` : success notification.
+- Profil `BURNED` : error notification (action user requise).
+- Captcha hard rencontré : warn notification.
+- Coût proxy quotidien dépassé : warn notification.
+
+---
+
+## §13. Open questions / risques
+
+### 13.1 Questions à trancher avant implémentation
+1. **Headless ou headful pour le farm ?** Headful = plus naturel (vraies dimensions, vraies fonts), mais explose la RAM (50 profils × 300 MB = 15 GB). Headless = plus économe mais détectable via certains heuristiques. **Recommandation** : headless avec patches anti-headless du fork (déjà en place via `force-default-pointer.patch`).
+
+2. **Quel niveau de simulation comportementale est suffisant ?** Mouse curves + scroll + dwell suffisent ? Ou faut-il aller jusqu'aux interactions complexes (drag, swipe, gestes) ? **Recommandation** : démarrer simple (curves+scroll+dwell), itérer si CreepJS / FpJS détectent.
+
+3. **Rotation de fingerprint pendant le farm ?** Un humain ne change pas de browser tous les jours. **Recommandation** : fingerprint figé pour la durée de vie du profil. Si le profil régresse, le burner et en créer un nouveau, pas changer le FP en place.
+
+4. **Multi-tab pendant farm ?** Ouvrir 2-3 tabs = humain, mais Camoufox = 1 fingerprint = 1 process. **Recommandation** : pas de multi-tab pour le farm — limite par design.
+
+5. **Faut-il farmer h24 ou respecter le sleep du timezone ?** Faux : un humain ne navigue pas à 4h du matin (ou très peu). Le scheduler §5.2 le respecte déjà. **Recommandation** : respecter strictement, c'est gratuit.
+
+6. **Persistent_context vs export/import de cookies ?** Persistent = simple, mais profil ne peut être farmé que sur 1 host. Export/import = portabilité. **Recommandation** : persistent par défaut, export comme fonctionnalité d'urgence (déjà via `cookie_export.py`).
+
+### 13.2 Risques majeurs
+- **Coût proxy explosif** : si on farm 500 profils × 3 sessions/jour, on est à ~375$/jour. Doit être budgété ou throttlé.
+- **Pattern de farm détectable** : si tous les profils visitent les mêmes 50 sites au même rythme, le pattern devient signature. Solution : grand catalog (>200 sites), poids randomisés par profil.
+- **Faux sentiment de sécurité** : un profil `MATURE` n'est pas garanti de passer un drop. C'est statistique. Communiquer sur les taux moyens, pas sur l'absolu.
+- **Évolution des détecteurs** : Cloudflare/Akamai ajoutent de nouveaux signals tous les mois. Le système doit être versionné et auditer ses propres taux de succès régulièrement (cf. métriques §10.5).
+
+### 13.3 Estimation effort d'implémentation
+| Composant | Effort |
+|-----------|--------|
+| `farming/` module (lifecycle + maturity + catalog + patterns + scheduler + builder) | 3 j |
+| Modifications `fpgen.Profile` + migration v1→v2 | 0.5 j |
+| Modifications `proxypool.Proxy` + sticky assignation | 0.5 j |
+| Action `farm-session` dans `task_worker.py` | 1 j |
+| Job `farm_dispatcher` dans `scheduler.py` | 0.5 j |
+| Commandes bridge (9 nouvelles) | 1 j |
+| Onglet Electron "Farming" + 4 sous-vues | 3 j |
+| Catalog initial (200+ sites par catégorie) | 1 j |
+| Tests unitaires + intégration | 2 j |
+| Documentation utilisateur | 0.5 j |
+| **Total** | **~13 j-homme** |
+
+### 13.4 MVP en 3 jours
+Si le budget est serré, version minimale :
+- `farming.maturity` + `farming.lifecycle` (sans archetype bias, formule simple).
+- 1 seul pattern par catégorie (pas de variantes).
+- Catalog hardcodé 50 sites.
+- Pas de scheduler intégré : trigger manuel via `farm_start`.
+- Pas d'UI : juste `farm_status` en CLI.
+
+Permet de valider l'approche sur 5-10 profils avant d'investir dans le scaling.
+
+---
+
+**Fin de l'architecture.** Prochaine étape : décision go/no-go + priorisation du backlog d'implémentation.
