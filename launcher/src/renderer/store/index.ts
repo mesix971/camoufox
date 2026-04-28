@@ -6,6 +6,7 @@ import type {
   SessionWithMetrics, Task,
 } from "../../shared/types";
 import { api } from "../api";
+import { applyTheme, getStoredTheme, type ThemeId } from "../themes";
 
 export interface AppState {
   tab: "dashboard" | "profiles" | "proxies" | "sessions" | "tasks" | "macros" | "settings";
@@ -49,6 +50,10 @@ export interface AppState {
   toast: { kind: "info" | "error" | "success"; text: string } | null;
   showToast: (kind: "info" | "error" | "success", text: string) => void;
   clearToast: () => void;
+
+  // Theme — persisted in localStorage and applied to <html data-theme>.
+  theme: ThemeId;
+  setTheme: (t: ThemeId) => void;
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -160,4 +165,10 @@ export const useAppStore = create<AppState>((set, get) => ({
     }, 4000);
   },
   clearToast: () => set({ toast: null }),
+
+  theme: getStoredTheme(),
+  setTheme: (theme) => {
+    applyTheme(theme);
+    set({ theme });
+  },
 }));
