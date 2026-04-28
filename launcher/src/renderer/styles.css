@@ -53,38 +53,46 @@
   --shadow-glow: 0 0 0 1px rgb(124 58 237 / 0.3);
 }
 
-/* 2. LINEAR — neutral cool gray + sober blue accent */
+/* 2. VERRE — light glassmorphism, translucent everything */
 [data-theme="linear"] {
-  --color-surface-50:  248 249 251;
-  --color-surface-100: 235 236 240;
-  --color-surface-200: 219 220 226;
-  --color-surface-700:  37  39  47;
-  --color-surface-800:  24  25  31;
-  --color-surface-900:  16  17  21;
+  /* Surface scale runs from "subtle white tint" (50) to "translucent
+     glass card" (700+). 800/900 are NOT pure black — they're cool
+     near-white so the inverted-from-dark assumptions of the existing
+     Tailwind classes still produce sensible contrast. */
+  --color-surface-50:  255 255 255;
+  --color-surface-100:  30  32  44;   /* used as "high-contrast text" */
+  --color-surface-200: 100 104 122;
+  --color-surface-700: 226 230 240;
+  --color-surface-800: 245 247 252;
+  --color-surface-900: 232 236 245;
 
-  --color-accent-500:  94 106 210;
-  --color-accent-600:  77  88 187;
+  --color-accent-500:  79  70 229;   /* indigo-600 */
+  --color-accent-600:  67  56 202;   /* indigo-700 */
 
-  --color-bg:         16  17  21;
-  --color-elevated:   24  25  31;
-  --color-border:     37  39  47;
-  --color-muted:      28  30  36;
-  --color-fg:        235 236 240;
-  --color-fg-muted:  138 142 156;
-  --color-success:    62 200 153;
-  --color-warning:   247 187  85;
-  --color-danger:    235  87  87;
+  --color-bg:        236 240 248;
+  --color-elevated:  255 255 255;
+  --color-border:    214 220 232;
+  --color-muted:     232 236 245;
+  --color-fg:         24  28  40;
+  --color-fg-muted:  100 110 130;
+  --color-success:    16 185 129;
+  --color-warning:   217 119   6;
+  --color-danger:    220  38  38;
 
   --font-sans:    "Inter", "Inter Placeholder", -apple-system, BlinkMacSystemFont, sans-serif;
   --font-mono:    "JetBrains Mono", "SF Mono", Menlo, monospace;
   --font-display: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
 
-  --radius-sm: 6px;
-  --radius:    8px;
-  --radius-lg: 12px;
+  --radius-sm: 8px;
+  --radius:   12px;
+  --radius-lg: 18px;
 
-  --shadow-soft: 0 1px 2px rgb(0 0 0 / 0.5), 0 8px 24px rgb(0 0 0 / 0.32);
-  --shadow-glow: 0 0 0 1px rgb(94 106 210 / 0.35), 0 0 24px rgb(94 106 210 / 0.18);
+  --shadow-soft:
+    0 1px 2px rgb(15 23 42 / 0.06),
+    0 8px 24px rgb(15 23 42 / 0.08);
+  --shadow-glow:
+    0 0 0 1px rgb(79 70 229 / 0.25),
+    0 0 28px rgb(79 70 229 / 0.18);
 }
 
 /* 3. RAYCAST — vivid coral, glassy darks, gradient-friendly */
@@ -226,74 +234,323 @@
 /* THEME-SPECIFIC VISUAL IDENTITY                                       */
 /* =================================================================== */
 
-/* ------------------- LINEAR ------------------- */
+/* ------------------- VERRE (light glassmorphism) ------------------- */
 /*
- * Linear: precise, soft, depth-via-shadow not borders.
- * - Header: pill-shaped tabs, soft active indicator dot.
- * - Sections: gradient surface, hairline borders, soft inset shadows.
- * - Buttons: subtle gradient + soft drop shadow on primary.
- * - Inputs: thicker focus ring.
+ * Light theme — translucent surfaces over a soft mesh-tinted background,
+ * with backdrop-blur on every elevated layer. The page itself shows
+ * vague pastel halos that the cards sit "above" via blur. Dark text on
+ * very-near-white surfaces; indigo accent everywhere a dark theme would
+ * use white-on-color.
  */
+
+/* Page background: pale gradient mesh that the glass surfaces blur. */
+[data-theme="linear"] body {
+  background:
+    radial-gradient(ellipse 60% 40% at 15% 0%,
+      rgb(99 102 241 / 0.10), transparent 60%),
+    radial-gradient(ellipse 50% 35% at 100% 100%,
+      rgb(236 72 153 / 0.07), transparent 60%),
+    radial-gradient(ellipse 40% 30% at 50% 70%,
+      rgb(56 189 248 / 0.06), transparent 60%),
+    rgb(var(--color-bg));
+  background-attachment: fixed;
+}
+
+/* Header glass bar. */
 [data-theme="linear"] header {
-  background: linear-gradient(180deg,
-    rgb(var(--color-elevated) / 1) 0%,
-    rgb(var(--color-bg) / 1) 100%);
-  backdrop-filter: blur(12px);
-  border-bottom-color: rgb(var(--color-border) / 0.6);
+  background: rgb(255 255 255 / 0.6);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border-bottom: 1px solid rgb(15 23 42 / 0.08);
 }
 [data-theme="linear"] header button {
   border-radius: 999px;
   font-weight: 500;
-  letter-spacing: -0.01em;
-  position: relative;
+  color: rgb(var(--color-fg-muted));
+}
+[data-theme="linear"] header button:hover {
+  background: rgb(15 23 42 / 0.05);
+  color: rgb(var(--color-fg));
 }
 [data-theme="linear"] header button.bg-surface-700 {
-  background: linear-gradient(180deg,
-    rgb(var(--color-accent-500) / 0.15) 0%,
-    rgb(var(--color-accent-500) / 0.05) 100%);
-  color: rgb(var(--color-fg));
-  box-shadow: inset 0 0 0 1px rgb(var(--color-accent-500) / 0.25);
-}
-[data-theme="linear"] header button.bg-surface-700::before {
-  content: "";
-  position: absolute;
-  left: 50%;
-  bottom: -3px;
-  transform: translateX(-50%);
-  width: 4px;
-  height: 4px;
-  border-radius: 999px;
   background: rgb(var(--color-accent-500));
-  box-shadow: 0 0 8px rgb(var(--color-accent-500) / 0.6);
+  color: white;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.2),
+    0 4px 16px rgb(var(--color-accent-500) / 0.35);
 }
+
+/* Cards: translucent white with backdrop blur — the headline glass effect. */
 [data-theme="linear"] section.bg-surface-800,
 [data-theme="linear"] .bg-surface-800.rounded-lg {
-  background: linear-gradient(180deg,
-    rgb(var(--color-elevated) / 1) 0%,
-    rgb(var(--color-bg) / 1) 100%);
-  border-color: rgb(var(--color-border) / 0.6);
-  box-shadow: var(--shadow-soft);
-}
-[data-theme="linear"] .btn-primary {
-  background: linear-gradient(180deg,
-    rgb(var(--color-accent-500)) 0%,
-    rgb(var(--color-accent-600)) 100%);
+  background: rgb(255 255 255 / 0.55);
+  backdrop-filter: blur(24px) saturate(160%);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
+  border: 1px solid rgb(15 23 42 / 0.06);
   box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 0.15),
-    0 1px 2px rgb(0 0 0 / 0.3),
-    0 4px 12px rgb(var(--color-accent-500) / 0.25);
+    inset 0 1px 0 rgb(255 255 255 / 0.6),
+    0 1px 2px rgb(15 23 42 / 0.04),
+    0 16px 48px rgb(15 23 42 / 0.06);
+}
+
+/* Buttons. */
+[data-theme="linear"] .btn-primary {
+  background: rgb(var(--color-accent-500));
+  color: white;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.2),
+    0 1px 2px rgb(var(--color-accent-500) / 0.2),
+    0 8px 20px rgb(var(--color-accent-500) / 0.25);
 }
 [data-theme="linear"] .btn-primary:hover {
   filter: brightness(1.08);
+  transform: translateY(-1px);
 }
 [data-theme="linear"] .btn-ghost {
-  background: rgb(var(--color-elevated) / 0.6);
+  background: rgb(255 255 255 / 0.6);
+  backdrop-filter: blur(8px);
+  border-color: rgb(15 23 42 / 0.08);
+  color: rgb(var(--color-fg));
+}
+[data-theme="linear"] .btn-ghost:hover {
+  background: rgb(255 255 255 / 0.85);
+  border-color: rgb(15 23 42 / 0.12);
+}
+[data-theme="linear"] .btn-danger {
+  background: rgb(var(--color-danger));
+  box-shadow: 0 8px 20px rgb(var(--color-danger) / 0.25);
+}
+
+/* Inputs: glass field with focus glow. */
+[data-theme="linear"] .input {
+  background: rgb(255 255 255 / 0.6);
+  border: 1px solid rgb(15 23 42 / 0.1);
+  color: rgb(var(--color-fg));
   backdrop-filter: blur(8px);
 }
+[data-theme="linear"] .input::placeholder {
+  color: rgb(var(--color-fg-muted) / 0.8);
+}
 [data-theme="linear"] .input:focus {
+  background: rgb(255 255 255 / 0.85);
+  border-color: rgb(var(--color-accent-500));
   box-shadow:
-    0 0 0 3px rgb(var(--color-accent-500) / 0.18),
-    inset 0 0 0 1px rgb(var(--color-accent-500));
+    0 0 0 4px rgb(var(--color-accent-500) / 0.15),
+    0 4px 16px rgb(var(--color-accent-500) / 0.1);
+}
+
+/* Modals get extra-strong backdrop blur. */
+[data-theme="linear"] .fixed.inset-0.z-50 {
+  background: rgb(15 23 42 / 0.25);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+[data-theme="linear"] .fixed.inset-0.z-50 > .bg-surface-800 {
+  background: rgb(255 255 255 / 0.85);
+  backdrop-filter: blur(32px) saturate(180%);
+  -webkit-backdrop-filter: blur(32px) saturate(180%);
+  border: 1px solid rgb(255 255 255 / 0.8);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.9),
+    0 0 0 1px rgb(15 23 42 / 0.05),
+    0 30px 80px rgb(15 23 42 / 0.2);
+}
+
+/* Toast: floating glass pill. */
+[data-theme="linear"] .fixed.bottom-4.right-4 {
+  background: rgb(255 255 255 / 0.85) !important;
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid rgb(15 23 42 / 0.08) !important;
+  color: rgb(var(--color-fg)) !important;
+  border-radius: 14px !important;
+  box-shadow:
+    0 1px 2px rgb(15 23 42 / 0.04),
+    0 16px 48px rgb(15 23 42 / 0.12) !important;
+}
+
+/* Scrollbar: thin and subtle on light bg. */
+[data-theme="linear"] *::-webkit-scrollbar-thumb {
+  background: rgb(15 23 42 / 0.18);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+[data-theme="linear"] *::-webkit-scrollbar-thumb:hover {
+  background: rgb(15 23 42 / 0.32);
+  background-clip: padding-box;
+  border: 2px solid transparent;
+}
+
+/* Sidebar in glass mode. */
+[data-theme="linear"] aside {
+  background: rgb(255 255 255 / 0.55);
+  backdrop-filter: blur(24px) saturate(160%);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
+  border-right: 1px solid rgb(15 23 42 / 0.06);
+}
+[data-theme="linear"] aside nav button {
+  color: rgb(var(--color-fg-muted));
+}
+[data-theme="linear"] aside nav button:hover {
+  background: rgb(15 23 42 / 0.04);
+  color: rgb(var(--color-fg));
+}
+[data-theme="linear"] aside nav button.text-accent-500 {
+  background: rgb(var(--color-accent-500) / 0.1);
+  color: rgb(var(--color-accent-500));
+  border-left-color: rgb(var(--color-accent-500));
+}
+
+/* Command palette: heavy glass. */
+[data-theme="linear"] .command-palette {
+  background: rgb(255 255 255 / 0.85) !important;
+  backdrop-filter: blur(32px) saturate(180%);
+  -webkit-backdrop-filter: blur(32px) saturate(180%);
+  border: 1px solid rgb(255 255 255 / 0.8) !important;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.9),
+    0 0 0 1px rgb(15 23 42 / 0.05),
+    0 30px 80px rgb(15 23 42 / 0.2) !important;
+  color: rgb(var(--color-fg));
+}
+
+/* Page header: glass band with subtle accent halo. */
+[data-theme="linear"] .page-header {
+  background: rgb(255 255 255 / 0.5);
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  border-bottom: 1px solid rgb(15 23 42 / 0.06);
+  position: relative;
+  overflow: hidden;
+}
+[data-theme="linear"] .page-header::before {
+  content: "";
+  position: absolute;
+  top: -40%; left: 60%;
+  width: 60%; height: 200%;
+  background: radial-gradient(ellipse at center,
+    rgb(var(--color-accent-500) / 0.10), transparent 70%);
+  filter: blur(40px);
+  pointer-events: none;
+}
+[data-theme="linear"] .page-header::after {
+  content: none; /* drop the dark-theme hairline */
+}
+[data-theme="linear"] .page-header-title {
+  color: rgb(var(--color-fg));
+  font-weight: 700;
+  letter-spacing: -0.025em;
+}
+[data-theme="linear"] .page-header-icon {
+  background: rgb(var(--color-accent-500) / 0.12);
+  border-color: rgb(var(--color-accent-500) / 0.25);
+  color: rgb(var(--color-accent-500));
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.6),
+    0 8px 24px rgb(var(--color-accent-500) / 0.18);
+}
+
+/* Section headers — tinted glass pill. */
+[data-theme="linear"] section.bg-surface-800 > .uppercase.tracking-wide,
+[data-theme="linear"] .bg-surface-800.rounded-lg > .uppercase.tracking-wide {
+  display: inline-flex;
+  width: auto;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgb(15 23 42 / 0.05);
+  color: rgb(var(--color-fg-muted));
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  font-size: 10px;
+}
+
+/* Tables. */
+[data-theme="linear"] table thead {
+  background: rgb(255 255 255 / 0.6);
+  color: rgb(var(--color-fg-muted));
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgb(15 23 42 / 0.08);
+}
+[data-theme="linear"] .table-row {
+  border-color: rgb(15 23 42 / 0.05);
+}
+[data-theme="linear"] .table-row:hover {
+  background: rgb(255 255 255 / 0.7) !important;
+  box-shadow: inset 3px 0 0 rgb(var(--color-accent-500));
+}
+
+/* Status badges — soft tinted pills. */
+[data-theme="linear"] .badge {
+  border: 1px solid currentColor;
+  background: rgb(255 255 255 / 0.5) !important;
+  filter: none;
+}
+[data-theme="linear"] .badge::before {
+  content: "";
+  display: inline-block;
+  width: 6px; height: 6px;
+  border-radius: 999px;
+  background: currentColor;
+  margin-right: 5px;
+  vertical-align: middle;
+  box-shadow: 0 0 4px currentColor;
+}
+[data-theme="linear"] .badge-running,
+[data-theme="linear"] .badge-active {
+  background: rgb(16 185 129 / 0.1) !important;
+  color: rgb(6 95 70);
+}
+[data-theme="linear"] .badge-stopped,
+[data-theme="linear"] .badge-untested {
+  background: rgb(15 23 42 / 0.05) !important;
+  color: rgb(71 85 105);
+}
+[data-theme="linear"] .badge-crashed,
+[data-theme="linear"] .badge-dead {
+  background: rgb(220 38 38 / 0.1) !important;
+  color: rgb(153 27 27);
+}
+[data-theme="linear"] .badge-flagged {
+  background: rgb(217 119 6 / 0.12) !important;
+  color: rgb(146 64 14);
+}
+[data-theme="linear"] .badge-starting {
+  background: rgb(56 189 248 / 0.12) !important;
+  color: rgb(7 89 133);
+}
+
+/* Stat cards on dashboard — let the gradient halo show through glass. */
+[data-theme="linear"] button.text-left.p-5.rounded-lg {
+  background: rgb(255 255 255 / 0.6) !important;
+  backdrop-filter: blur(20px);
+  border-color: rgb(15 23 42 / 0.08) !important;
+}
+[data-theme="linear"] .text-4xl.font-bold {
+  color: rgb(var(--color-fg));
+  letter-spacing: -0.04em;
+}
+
+/* Skeleton on light. */
+[data-theme="linear"] .skeleton {
+  background-image: linear-gradient(
+    90deg,
+    rgb(15 23 42 / 0.04) 0%,
+    rgb(15 23 42 / 0.10) 50%,
+    rgb(15 23 42 / 0.04) 100%
+  );
+}
+
+/* Avatars on light: keep gradient but soften shadow. */
+[data-theme="linear"] .avatar {
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.25),
+    0 2px 8px rgb(15 23 42 / 0.18) !important;
+}
+
+/* Empty state on light. */
+[data-theme="linear"] .empty-state > div:first-child {
+  background: rgb(var(--color-accent-500) / 0.08);
+  border-color: rgb(var(--color-accent-500) / 0.25);
 }
 
 /* ------------------- RAYCAST ------------------- */
@@ -561,21 +818,8 @@
   animation: camoufox-slide-up 200ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-/* ---- LINEAR modals ---- */
-[data-theme="linear"] .fixed.inset-0.z-50 {
-  background: rgb(0 0 0 / 0.6);
-  backdrop-filter: blur(4px);
-}
-[data-theme="linear"] .fixed.inset-0.z-50 > .bg-surface-800 {
-  background: linear-gradient(180deg,
-    rgb(var(--color-elevated)) 0%,
-    rgb(var(--color-bg)) 100%);
-  border-color: rgb(var(--color-border));
-  box-shadow:
-    0 0 0 1px rgb(var(--color-accent-500) / 0.1),
-    0 25px 80px rgb(0 0 0 / 0.6);
-  animation: camoufox-slide-up 240ms cubic-bezier(0.16, 1, 0.3, 1);
-}
+/* (Verre theme modals are styled in the main Verre block above —
+   light glassmorphism overrides applied earlier.) */
 
 /* ---- RAYCAST modals ---- */
 [data-theme="raycast"] .fixed.inset-0.z-50 {
@@ -721,15 +965,8 @@
 }
 
 /* ---- TABLES ---- */
-[data-theme="linear"] .table-row {
-  border-color: rgb(var(--color-border) / 0.4);
-  transition: background 120ms ease;
-}
-[data-theme="linear"] .table-row:hover {
-  background: linear-gradient(90deg,
-    rgb(var(--color-accent-500) / 0.06),
-    transparent);
-}
+/* (Verre theme table rows are styled in the main Verre block above.) */
+
 [data-theme="raycast"] .table-row:hover {
   background: rgb(var(--color-accent-500) / 0.08);
   box-shadow: inset 3px 0 0 rgb(var(--color-accent-500));
@@ -781,12 +1018,8 @@ main > div {
 /* SIDEBAR LAYOUT — per-theme polish                                    */
 /* =================================================================== */
 
-[data-theme="linear"] aside {
-  background: linear-gradient(180deg,
-    rgb(var(--color-elevated) / 1) 0%,
-    rgb(var(--color-bg) / 1) 100%);
-  backdrop-filter: blur(10px);
-}
+/* (Verre theme sidebar styled in the main Verre block above.) */
+
 [data-theme="raycast"] aside {
   background: rgb(var(--color-elevated) / 0.5);
   backdrop-filter: blur(20px) saturate(140%);
@@ -848,15 +1081,7 @@ main > div {
   animation: palette-in 180ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-[data-theme="linear"] .command-palette {
-  background: linear-gradient(180deg,
-    rgb(var(--color-elevated)) 0%,
-    rgb(var(--color-bg)) 100%);
-  border-color: rgb(var(--color-border));
-  box-shadow:
-    0 0 0 1px rgb(var(--color-accent-500) / 0.12),
-    0 30px 80px rgb(0 0 0 / 0.6);
-}
+/* (Verre theme command palette styled in the main Verre block above.) */
 
 [data-theme="raycast"] .command-palette {
   background: rgb(var(--color-elevated) / 0.7);
@@ -907,96 +1132,6 @@ main > div {
 [data-theme="brutalist"] .command-palette button.bg-accent-500\/15 span {
   background: rgb(var(--color-bg)) !important;
   color: rgb(var(--color-accent-500)) !important;
-}
-
-/* =================================================================== */
-/* LINEAR — deeper visual identity                                      */
-/* =================================================================== */
-
-/* Dotted background grid (Linear's signature subtle texture). */
-[data-theme="linear"] body {
-  background-image:
-    radial-gradient(circle at 1px 1px,
-      rgb(var(--color-fg) / 0.04) 1px,
-      transparent 0);
-  background-size: 24px 24px;
-  background-attachment: fixed;
-}
-
-/* Hairline fade borders on cards — Linear's clean separators. */
-[data-theme="linear"] section.bg-surface-800,
-[data-theme="linear"] .bg-surface-800.rounded-lg {
-  border-image: linear-gradient(180deg,
-    rgb(var(--color-border) / 0.8) 0%,
-    rgb(var(--color-border) / 0.4) 50%,
-    rgb(var(--color-border) / 0.8) 100%) 1;
-  position: relative;
-}
-
-/* Section headers get a leading colored bar. */
-[data-theme="linear"] section.bg-surface-800 > .uppercase.tracking-wide,
-[data-theme="linear"] .bg-surface-800.rounded-lg > .uppercase.tracking-wide {
-  position: relative;
-  padding-left: 12px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  font-size: 11px;
-}
-[data-theme="linear"] section.bg-surface-800 > .uppercase.tracking-wide::before,
-[data-theme="linear"] .bg-surface-800.rounded-lg > .uppercase.tracking-wide::before {
-  content: "";
-  position: absolute;
-  left: 0; top: 50%;
-  transform: translateY(-50%);
-  width: 3px; height: 12px;
-  background: rgb(var(--color-accent-500));
-  border-radius: 2px;
-}
-
-/* Status badges get a leading dot indicator (Linear's hallmark). */
-[data-theme="linear"] .badge::before {
-  content: "";
-  display: inline-block;
-  width: 6px; height: 6px;
-  border-radius: 999px;
-  background: currentColor;
-  margin-right: 5px;
-  vertical-align: middle;
-  box-shadow: 0 0 4px currentColor;
-}
-
-/* Tabular numbers everywhere — Linear's data feel. */
-[data-theme="linear"] .font-mono,
-[data-theme="linear"] table {
-  font-variant-numeric: tabular-nums;
-  font-feature-settings: "tnum" 1;
-}
-
-/* Sticky table header. */
-[data-theme="linear"] table thead {
-  position: sticky; top: 0;
-  background: rgb(var(--color-bg) / 0.95);
-  backdrop-filter: blur(8px);
-}
-
-/* Tighter rows + alt-row striping. */
-[data-theme="linear"] .table-row td {
-  padding-top: 0.5rem;
-  padding-bottom: 0.5rem;
-}
-
-/* Inputs: subtle gradient floor on focus. */
-[data-theme="linear"] .input:focus {
-  background: linear-gradient(180deg,
-    rgb(var(--color-bg)) 0%,
-    rgb(var(--color-accent-500) / 0.04) 100%);
-}
-
-/* Big numbers in stat cards: slashed-zero feel + tracking. */
-[data-theme="linear"] .text-4xl.font-bold {
-  font-feature-settings: "ss01" 1, "tnum" 1;
-  letter-spacing: -0.04em;
-  font-weight: 700;
 }
 
 /* =================================================================== */
@@ -1193,40 +1328,7 @@ main > div {
   pointer-events: none;
 }
 
-/* LINEAR: dotted grid + gradient hairline at bottom. */
-[data-theme="linear"] .page-header {
-  background:
-    radial-gradient(circle at 1px 1px, rgb(var(--color-fg) / 0.05) 1px, transparent 0),
-    linear-gradient(180deg, rgb(var(--color-elevated)) 0%, rgb(var(--color-bg)) 100%);
-  background-size: 24px 24px, 100% 100%;
-  border-bottom: 0;
-  position: relative;
-}
-[data-theme="linear"] .page-header::after {
-  content: "";
-  position: absolute;
-  left: 24px; right: 24px; bottom: 0;
-  height: 1px;
-  background: linear-gradient(90deg,
-    transparent 0%,
-    rgb(var(--color-border)) 20%,
-    rgb(var(--color-border)) 80%,
-    transparent 100%);
-}
-[data-theme="linear"] .page-header-title {
-  font-weight: 600;
-  letter-spacing: -0.025em;
-}
-[data-theme="linear"] .page-header-icon {
-  border-radius: 8px;
-  background: linear-gradient(180deg,
-    rgb(var(--color-accent-500) / 0.18),
-    rgb(var(--color-accent-500) / 0.05));
-  box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 0.05),
-    0 0 0 1px rgb(var(--color-accent-500) / 0.2),
-    0 4px 16px rgb(var(--color-accent-500) / 0.15);
-}
+/* (Verre theme page-header styled in the main Verre block above.) */
 
 /* RAYCAST: big chromatic blob behind the icon, gradient title text. */
 [data-theme="raycast"] .page-header {
@@ -1405,12 +1507,7 @@ main > div {
   animation: empty-pulse 2.4s ease-in-out infinite;
 }
 
-[data-theme="linear"] .empty-state {
-  background:
-    radial-gradient(circle at 1px 1px,
-      rgb(var(--color-fg) / 0.04) 1px,
-      transparent 0) center/24px 24px;
-}
+/* (Verre theme empty-state styled in the main Verre block above.) */
 
 [data-theme="raycast"] .empty-state > div:first-child {
   border-radius: 24px;

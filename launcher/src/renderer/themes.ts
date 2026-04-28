@@ -22,9 +22,9 @@ export const THEMES: ThemeDescriptor[] = [
   },
   {
     id: "linear",
-    name: "Linear",
-    description: "Gris froid neutre, indigo sobre, typographie Inter — pro et lisible.",
-    swatches: ["#101115", "#181920", "#5e6ad2"],
+    name: "Verre",
+    description: "Glassmorphism clair — surfaces translucides, blur léger, accent indigo.",
+    swatches: ["#eef0f6", "#ffffff", "#4f46e5"],
   },
   {
     id: "raycast",
